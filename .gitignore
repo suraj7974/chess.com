@@ -62,9 +62,6 @@ docs/_build/
 
 # OS specific
 Thumbs.db
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-desktop.ini
-$RECYCLE.BIN/
+
+# Documentation builds
+*.pdf
