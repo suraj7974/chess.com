@@ -1,0 +1,40 @@
+
+# Client (React + Vite)
+client/node_modules
+client/dist
+client/dist-ssr
+client/*.local
+client/logs
+client/.env*
+client/coverage
+client/*.log
+
+# Server (Flask/Python)
+server/__pycache__/
+server/*/__pycache__/
+server/*/*/__pycache__/
+server/venv/
+server/.venv/
+server/env/
+server/.env
+server/*.pyc
+server/*.pyo
+server/*.pyd
+server/.Python
+server/pip-log.txt
+server/.coverage
+server/.pytest_cache/
+server/instance/
+
+# IDE/Editor specific
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Documentation builds
+*.pdf
