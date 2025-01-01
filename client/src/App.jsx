@@ -25,7 +25,7 @@ function App() {
   return (
     <Container maxW="container.xl" py={8}>
       <Heading as="h1" mb={8} textAlign="center">
-        Chess Game
+        Now play chess with llms 
       </Heading>
       <GameControls 
         onModeChange={(e) => setGameMode(e.target.value)}
