@@ -5,18 +5,34 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
+# Dependencies
 node_modules
+.pnpm-store/
+pnpm-lock.yaml
+
+# Build
 dist
 dist-ssr
 *.local
+.vite/
+stats.html
 
-# Editor directories and files
+# Testing
+coverage/
+test-results/
+playwright-report/
+cypress/videos/
+cypress/screenshots/
+.eslintcache
+
+# Environment
+.env*
+
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
