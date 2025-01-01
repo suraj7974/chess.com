@@ -1,10 +1,13 @@
-import { StrictMode } from 'react'
+import { ChakraProvider } from '@chakra-ui/react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
+import theme from './theme'
+import App from './App'
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
+const container = document.getElementById('root')
+const root = createRoot(container)
+
+root.render(
+  <ChakraProvider resetCSS theme={theme}>
     <App />
-  </StrictMode>,
+  </ChakraProvider>
 )
