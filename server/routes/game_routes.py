@@ -18,3 +18,7 @@ def make_move():
     move = data['move']
     response = chess_engines['default'].make_move(game_id, move)
     return jsonify(response)
+
+@game_routes.route('/test', methods=['GET'])
+def test_route():
+    return jsonify({"message": "Game routes working!"})
