@@ -1,17 +1,14 @@
 import { Chessboard } from 'react-chessboard'
 import { Box } from '@chakra-ui/react'
 
-const ChessBoard = ({ position = 'start', onPieceDrop }) => {
+function ChessBoard({ onPieceDrop, position }) {
   return (
-    <Box maxW="600px" w="100%">
+    <Box width="100%" maxW="600px" mx="auto">
       <Chessboard 
         position={position}
         onPieceDrop={onPieceDrop}
         boardWidth={600}
-        customBoardStyle={{
-          borderRadius: '4px',
-          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
-        }}
+        animationDuration={200}
       />
     </Box>
   )

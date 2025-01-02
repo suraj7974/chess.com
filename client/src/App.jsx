@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Container, Flex, Box, Heading } from '@chakra-ui/react'
+import { Chess } from 'chess.js'
 import ChessBoard from './components/ChessBoard'
 import GameControls from './components/GameControls'
 import GameInfo from './components/GameInfo'
@@ -9,31 +10,48 @@ function App() {
   const [gameMode, setGameMode] = useState('human')
   const [currentPlayer, setCurrentPlayer] = useState('White')
   const [moveHistory, setMoveHistory] = useState([])
+  const [position, setPosition] = useState('start')
+  const gameRef = useRef(new Chess())
 
   const handleNewGame = () => {
+    gameRef.current = new Chess()
     setMoveHistory([])
     setCurrentPlayer('White')
+    setPosition('start')
   }
 
   const handlePieceDrop = (sourceSquare, targetSquare) => {
-    // Chess logic will be implemented later
-    setMoveHistory([...moveHistory, `${sourceSquare} to ${targetSquare}`])
-    setCurrentPlayer(currentPlayer === 'White' ? 'Black' : 'White')
-    return true
+    try {
+      const move = gameRef.current.move({
+        from: sourceSquare,
+        to: targetSquare,
+        promotion: 'q' // always promote to queen for simplicity
+      })
+
+      if (move === null) return false // illegal move
+
+      setPosition(gameRef.current.fen())
+      setMoveHistory([...moveHistory, move.san])
+      setCurrentPlayer(gameRef.current.turn() === 'w' ? 'White' : 'Black')
+      return true
+    } catch (error) {
+      return false
+    }
   }
 
   return (
     <Container maxW="container.xl" py={8}>
-      <Heading as="h1" mb={8} textAlign="center">
-        Chess Game
-      </Heading>
+     
       <GameControls 
         onModeChange={(e) => setGameMode(e.target.value)}
         onNewGame={handleNewGame}
       />
       <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
         <Box flex={1}>
-          <ChessBoard onPieceDrop={handlePieceDrop} />
+          <ChessBoard 
+            position={position} 
+            onPieceDrop={handlePieceDrop} 
+          />
         </Box>
         <Box w={{ base: '100%', lg: '300px' }}>
           <GameInfo 
