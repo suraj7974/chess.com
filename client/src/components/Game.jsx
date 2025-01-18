@@ -77,10 +77,10 @@ function Game() {
 
   return (
     <Container maxW="container.xl" py={8}>
-      <GameControls 
+      {/* <GameControls 
         onModeChange={(e) => setGameMode(e.target.value)}
         onNewGame={handleNewGame}
-      />
+      /> */}
       <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
         <Box flex={1}>
           <ChessBoard 
@@ -90,12 +90,12 @@ function Game() {
             customSquareStyles={possibleMoves}
           />
         </Box>
-        <Box w={{ base: '100%', lg: '300px' }}>
+        {/* <Box w={{ base: '100%', lg: '300px' }}>
           <GameInfo 
             currentPlayer={currentPlayer}
             moveHistory={moveHistory}
           />
-        </Box>
+        </Box> */}
       </Flex>
     </Container>
   )
