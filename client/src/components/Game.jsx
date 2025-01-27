@@ -1,5 +1,17 @@
 import { useState, useRef } from 'react'
-import { Container, Flex, Box } from '@chakra-ui/react'
+import { 
+  Container, 
+  Flex, 
+  Box, 
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  useDisclosure
+} from '@chakra-ui/react'
 import { Chess } from 'chess.js'
 import ChessBoard from './ChessBoard'
 import GameControls from './GameControls'
@@ -11,6 +23,8 @@ function Game() {
   const [moveHistory, setMoveHistory] = useState([])
   const [position, setPosition] = useState('start')
   const [possibleMoves, setPossibleMoves] = useState({})
+  const [gameStatus, setGameStatus] = useState(null)
+  const { isOpen, onOpen, onClose } = useDisclosure()
   const gameRef = useRef(new Chess())
 
   const highlightSquare = {
@@ -22,11 +36,34 @@ function Game() {
     background: 'rgba(255, 165, 0, 0.4)',
   }
 
+  const checkGameStatus = () => {
+    if (gameRef.current.isCheckmate()) {
+      const winner = gameRef.current.turn() === 'w' ? 'Black' : 'White'
+      setGameStatus(`Checkmate! ${winner} wins!`)
+      onOpen()
+    } else if (gameRef.current.isStalemate()) {
+      setGameStatus('Game drawn by stalemate')
+      onOpen()
+    } else if (gameRef.current.isInsufficientMaterial()) {
+      setGameStatus('Game drawn by insufficient material')
+      onOpen()
+    } else if (gameRef.current.isDraw()) {
+      setGameStatus('Game drawn')
+      onOpen()
+    }
+  }
+
   const handleNewGame = () => {
     gameRef.current = new Chess()
     setMoveHistory([])
     setCurrentPlayer('White')
     setPosition('start')
+    setGameStatus(null)
+  }
+
+  const handleNewGameAndClose = () => {
+    handleNewGame()
+    onClose()
   }
 
   const handlePieceClick = (square) => {
@@ -69,6 +106,7 @@ function Game() {
       setMoveHistory([...moveHistory, move.san])
       setCurrentPlayer(gameRef.current.turn() === 'w' ? 'White' : 'Black')
       setPossibleMoves({})
+      checkGameStatus()
       return true
     } catch (error) {
       return false
@@ -77,10 +115,24 @@ function Game() {
 
   return (
     <Container maxW="container.xl" py={8}>
-      {/* <GameControls 
-        onModeChange={(e) => setGameMode(e.target.value)}
-        onNewGame={handleNewGame}
-      /> */}
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Game Over</ModalHeader>
+          <ModalBody>
+            {gameStatus}
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" mr={3} onClick={handleNewGameAndClose}>
+              New Game
+            </Button>
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
         <Box flex={1}>
           <ChessBoard 
@@ -90,12 +142,6 @@ function Game() {
             customSquareStyles={possibleMoves}
           />
         </Box>
-        {/* <Box w={{ base: '100%', lg: '300px' }}>
-          <GameInfo 
-            currentPlayer={currentPlayer}
-            moveHistory={moveHistory}
-          />
-        </Box> */}
       </Flex>
     </Container>
   )
