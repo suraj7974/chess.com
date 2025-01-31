@@ -16,6 +16,7 @@ import { Chess } from 'chess.js'
 import ChessBoard from './ChessBoard'
 import GameControls from './GameControls'
 import GameInfo from './GameInfo'
+import { getStockfishMove } from '../services/stockfish.service'
 
 function Game() {
   const [gameMode, setGameMode] = useState('human')
@@ -26,6 +27,7 @@ function Game() {
   const [gameStatus, setGameStatus] = useState(null)
   const { isOpen, onOpen, onClose } = useDisclosure()
   const gameRef = useRef(new Chess())
+  const [isThinking, setIsThinking] = useState(false)
 
   const highlightSquare = {
     background: 'radial-gradient(circle, rgba(0,0,0,.4) 25%, transparent 25%)',
@@ -92,6 +94,35 @@ function Game() {
     }
   }
 
+  const makeComputerMove = async () => {
+    if (gameMode !== 'stockfish' || gameStatus || isThinking) return;
+
+    try {
+      setIsThinking(true);
+      const fen = gameRef.current.fen();
+      const move = await getStockfishMove(fen);
+
+      if (move) {
+        const result = gameRef.current.move({
+          from: move.substring(0, 2),
+          to: move.substring(2, 4),
+          promotion: move.length === 5 ? move[4] : undefined
+        });
+
+        if (result) {
+          setPosition(gameRef.current.fen());
+          setMoveHistory([...moveHistory, result.san]);
+          setCurrentPlayer(gameRef.current.turn() === 'w' ? 'White' : 'Black');
+          checkGameStatus();
+        }
+      }
+    } catch (error) {
+      console.error('Error making computer move:', error);
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
   const handlePieceDrop = (sourceSquare, targetSquare) => {
     try {
       const move = gameRef.current.move({
@@ -107,6 +138,11 @@ function Game() {
       setCurrentPlayer(gameRef.current.turn() === 'w' ? 'White' : 'Black')
       setPossibleMoves({})
       checkGameStatus()
+
+      if (gameMode === 'stockfish' && !gameStatus) {
+        setTimeout(makeComputerMove, 300);
+      }
+      
       return true
     } catch (error) {
       return false
@@ -135,11 +171,24 @@ function Game() {
 
       <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
         <Box flex={1}>
+          <GameControls
+            gameMode={gameMode}
+            setGameMode={setGameMode}
+            onNewGame={handleNewGame}
+            disabled={isThinking}
+          />
           <ChessBoard 
             position={position} 
             onPieceDrop={handlePieceDrop} 
             onPieceClick={handlePieceClick}
             customSquareStyles={possibleMoves}
+          />
+        </Box>
+        <Box>
+          <GameInfo
+            currentPlayer={currentPlayer}
+            moveHistory={moveHistory}
+            isThinking={isThinking}
           />
         </Box>
       </Flex>
