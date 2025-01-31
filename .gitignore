@@ -1,0 +1,68 @@
+# Project-wide
+*.log
+.DS_Store
+.env*
+node_modules/
+dist/
+coverage/
+*.pyc
+__pycache__/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Client specific paths
+client/dist/
+client/dist-ssr/
+client/.vite/
+client/stats.html
+client/test-results/
+client/playwright-report/
+client/.eslintcache
+client/cypress/
+client/pnpm-lock.yaml
+
+# Server specific paths
+server/venv/
+server/.venv/
+server/env/
+server/instance/
+server/migrations/
+server/*.db
+server/*.sqlite
+server/logs/
+server/.ruff_cache/
+server/.mypy_cache/
+server/htmlcov/
+server/.coverage*
+server/models
+
+# Dependencies
+**/.pnpm-store/
+**/yarn.lock
+**/package-lock.json
+**/.yarn/*
+**/.pnp.*
+
+# Build and cache
+.cache/
+.temp/
+.tmp/
+build/
+out/
+.next/
+.nuxt/
+.output/
+
+# Documentation
+*.pdf
+docs/_build/
+.docusaurus
+.cache-loader
+
+# OS specific
+Thumbs.db
+
+# Documentation builds
+*.pdf
