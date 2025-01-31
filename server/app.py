@@ -7,7 +7,10 @@ from routes.game_routes import game_routes
 
 app = Flask(__name__)
 CORS(app)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Stockfish configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,37 +19,99 @@ STOCKFISH_PATH = os.path.join(BASE_DIR, "models", "stockfish-ubuntu-x86-64-avx2"
 class StockfishEngine:
     def __init__(self):
         if not os.path.exists(STOCKFISH_PATH):
+            logging.error(f"Stockfish not found at {STOCKFISH_PATH}")
             raise FileNotFoundError(f"Stockfish not found at {STOCKFISH_PATH}")
             
         try:
+            # Make sure stockfish is executable
+            os.chmod(STOCKFISH_PATH, 0o755)
+            
+            logging.info(f"Starting Stockfish from: {STOCKFISH_PATH}")
             self.stockfish = subprocess.Popen(
                 [STOCKFISH_PATH],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                bufsize=1,  # Line buffered
+                universal_newlines=True
             )
+            
+            # Check if process is alive
+            if self.stockfish.poll() is not None:
+                raise Exception("Stockfish process failed to start")
+
+            # Initialize engine
             self.send_command("uci")
-            self.read_output_until("uciok")
+            
+            # Wait for initialization
+            lines = []
+            while True:
+                line = self.stockfish.stdout.readline().strip()
+                logging.debug(f"Init output: {line}")
+                lines.append(line)
+                if "uciok" in line:
+                    break
+                if not line and self.stockfish.poll() is not None:
+                    raise Exception(f"Stockfish initialization failed: {'; '.join(lines)}")
+
+            logging.info("Stockfish initialized successfully")
+            
+            # Set default options
+            self.send_command("setoption name Threads value 1")
+            self.send_command("setoption name Hash value 64")
+            
         except Exception as e:
-            raise Exception(f"Failed to start Stockfish: {str(e)}")
+            logging.error(f"Failed to start Stockfish: {str(e)}")
+            if hasattr(self, 'stockfish'):
+                self.stockfish.terminate()
+            raise
 
     def send_command(self, cmd):
-        self.stockfish.stdin.write(f"{cmd}\n")
-        self.stockfish.stdin.flush()
+        logging.debug(f"Sending command: {cmd}")
+        try:
+            self.stockfish.stdin.write(f"{cmd}\n")
+            self.stockfish.stdin.flush()
+        except Exception as e:
+            logging.error(f"Error sending command: {str(e)}")
+            raise
 
     def read_output_until(self, target):
+        lines = []
         while True:
+            if self.stockfish.poll() is not None:
+                raise Exception(f"Stockfish process terminated: {'; '.join(lines)}")
+                
             line = self.stockfish.stdout.readline().strip()
+            logging.debug(f"Read output: {line}")
+            lines.append(line)
+            
             if target in line:
                 return line
 
     def get_best_move(self, fen, skill_level=20):
-        self.send_command(f"setoption name Skill Level value {skill_level}")
-        self.send_command("ucinewgame")
-        self.send_command(f"position fen {fen}")
-        self.send_command("go movetime 1000")
-        return self.read_output_until("bestmove").split()[1]
+        logging.info(f"Getting move for position: {fen}")
+        try:
+            self.send_command(f"setoption name Skill Level value {skill_level}")
+            self.send_command("ucinewgame")
+            self.send_command(f"position fen {fen}")
+            self.send_command("go movetime 1000")
+            
+            result = self.read_output_until("bestmove")
+            move = result.split()[1]
+            logging.info(f"Best move found: {move}")
+            return move
+        except Exception as e:
+            logging.error(f"Error getting move: {str(e)}")
+            raise
+
+    def __del__(self):
+        if hasattr(self, 'stockfish'):
+            try:
+                self.stockfish.terminate()
+                self.stockfish.wait(timeout=1)
+            except Exception as e:
+                logging.error(f"Error cleaning up Stockfish: {str(e)}")
 
 # Initialize Stockfish engine
 try:

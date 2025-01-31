@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { 
   Container, 
   Flex, 
@@ -94,13 +94,35 @@ function Game() {
     }
   }
 
+  // Add effect to handle mode changes
+  useEffect(() => {
+    console.log('Game mode changed:', gameMode);
+    if (gameMode === 'stockfish') {
+      handleNewGame();
+    }
+  }, [gameMode]);
+
   const makeComputerMove = async () => {
-    if (gameMode !== 'stockfish' || gameStatus || isThinking) return;
+    console.log('makeComputerMove called:', {
+      gameMode,
+      gameStatus,
+      isThinking,
+      currentPlayer,
+      position: gameRef.current.fen()
+    });
+
+    if (gameMode !== 'stockfish' || gameStatus || isThinking) {
+      console.log('Skipping computer move');
+      return;
+    }
 
     try {
       setIsThinking(true);
       const fen = gameRef.current.fen();
+      console.log('Requesting move for position:', fen);
+      
       const move = await getStockfishMove(fen);
+      console.log('Received move from Stockfish:', move);
 
       if (move) {
         const result = gameRef.current.move({
@@ -109,43 +131,66 @@ function Game() {
           promotion: move.length === 5 ? move[4] : undefined
         });
 
+        console.log('Move result:', result);
+
         if (result) {
-          setPosition(gameRef.current.fen());
-          setMoveHistory([...moveHistory, result.san]);
+          const newPosition = gameRef.current.fen();
+          console.log('New position:', newPosition);
+          setPosition(newPosition);
+          setMoveHistory(prev => [...prev, result.san]);
           setCurrentPlayer(gameRef.current.turn() === 'w' ? 'White' : 'Black');
           checkGameStatus();
         }
       }
     } catch (error) {
-      console.error('Error making computer move:', error);
+      console.error('Stockfish move error:', error);
     } finally {
       setIsThinking(false);
     }
   };
 
   const handlePieceDrop = (sourceSquare, targetSquare) => {
+    console.log('Piece drop:', {
+      sourceSquare,
+      targetSquare,
+      gameMode,
+      isThinking,
+      turn: gameRef.current.turn()
+    });
+
+    if (isThinking) return false;
+    
+    if (gameMode === 'stockfish' && gameRef.current.turn() !== 'w') {
+      console.log('Not player turn in stockfish mode');
+      return false;
+    }
+
     try {
       const move = gameRef.current.move({
         from: sourceSquare,
         to: targetSquare,
         promotion: 'q'
-      })
+      });
 
-      if (move === null) return false
+      if (move === null) return false;
 
-      setPosition(gameRef.current.fen())
-      setMoveHistory([...moveHistory, move.san])
-      setCurrentPlayer(gameRef.current.turn() === 'w' ? 'White' : 'Black')
-      setPossibleMoves({})
-      checkGameStatus()
+      console.log('Human move made:', move);
+      setPosition(gameRef.current.fen());
+      setMoveHistory(prev => [...prev, move.san]);
+      setCurrentPlayer(gameRef.current.turn() === 'w' ? 'White' : 'Black');
+      setPossibleMoves({});
+      checkGameStatus();
 
+      // Trigger computer move after a short delay
       if (gameMode === 'stockfish' && !gameStatus) {
-        setTimeout(makeComputerMove, 300);
+        console.log('Scheduling computer move');
+        setTimeout(makeComputerMove, 500);
       }
       
-      return true
+      return true;
     } catch (error) {
-      return false
+      console.error('Move error:', error);
+      return false;
     }
   }
 
