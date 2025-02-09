@@ -2,15 +2,18 @@ import { Chessboard } from "react-chessboard";
 import { Box } from "@chakra-ui/react";
 import { CustomSquareStyles } from "../types";
 import { Square } from "chess.js";
+import { Piece } from "react-chessboard/dist/chessboard/types";
 
 interface ChessBoardProps {
   onPieceDrop: (source: Square, target: Square) => boolean;
   position: string;
   onPieceClick: (square: Square) => void;
   customSquareStyles: CustomSquareStyles;
+  onPieceDragBegin: (piece: Piece, sourceSquare: Square) => void;
+  onPieceDragEnd: () => void;
 }
 
-function ChessBoard({ onPieceDrop, position, onPieceClick, customSquareStyles }: ChessBoardProps) {
+function ChessBoard({ onPieceDrop, position, onPieceClick, customSquareStyles, onPieceDragBegin, onPieceDragEnd }: ChessBoardProps) {
   const customBoardStyle = {
     borderRadius: "4px",
     boxShadow: "0 2px 10px rgba(0, 0, 0, 0.5)",
@@ -18,6 +21,10 @@ function ChessBoard({ onPieceDrop, position, onPieceClick, customSquareStyles }:
 
   const customDarkSquareStyle = { backgroundColor: "#5B793D" };
   const customLightSquareStyle = { backgroundColor: "#eeeeee" };
+
+  const handleSquareClick = (square: Square) => {
+    onPieceClick(square);
+  };
 
   const handlePieceClick = (piece: any) => {
     if (piece && piece.square) {
@@ -30,7 +37,7 @@ function ChessBoard({ onPieceDrop, position, onPieceClick, customSquareStyles }:
       <Chessboard
         position={position}
         onPieceDrop={onPieceDrop}
-        onSquareClick={onPieceClick}
+        onSquareClick={handleSquareClick}
         onPieceClick={handlePieceClick}
         customSquareStyles={customSquareStyles}
         boardWidth={600}
@@ -40,6 +47,8 @@ function ChessBoard({ onPieceDrop, position, onPieceClick, customSquareStyles }:
         customBoardStyle={customBoardStyle}
         customDarkSquareStyle={customDarkSquareStyle}
         customLightSquareStyle={customLightSquareStyle}
+        onPieceDragBegin={onPieceDragBegin}
+        onPieceDragEnd={onPieceDragEnd}
       />
     </Box>
   );

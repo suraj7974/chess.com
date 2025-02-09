@@ -6,6 +6,7 @@ import ChessBoard from "./ChessBoard";
 import GameControls from "./GameControls";
 import GameInfo from "./GameInfo";
 import { getStockfishMove } from "../services/stockfish.service";
+import { Piece } from "react-chessboard/dist/chessboard/types";
 
 function Game() {
   const [gameMode, setGameMode] = useState<GameModeType>("human");
@@ -17,6 +18,7 @@ function Game() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const gameRef = useRef<Chess>(new Chess());
   const [isThinking, setIsThinking] = useState(false);
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
 
   const highlightSquare = {
     background: "radial-gradient(circle, rgba(0,0,0,.4) 25%, transparent 25%)",
@@ -58,8 +60,26 @@ function Game() {
   };
 
   const handlePieceClick = (square: Square) => {
+    // If clicking the same square that was already selected, clear the selection
+    if (selectedSquare === square) {
+      setSelectedSquare(null);
+      setPossibleMoves({});
+      return;
+    }
+
+    // If a different square was previously selected, try to make a move
+    if (selectedSquare) {
+      const moveSuccess = handlePieceDrop(selectedSquare, square);
+      setSelectedSquare(null);
+      if (moveSuccess) {
+        setPossibleMoves({});
+        return;
+      }
+    }
+
     if (!square) {
       setPossibleMoves({});
+      setSelectedSquare(null);
       return;
     }
 
@@ -78,8 +98,10 @@ function Game() {
       });
 
       setPossibleMoves(moves);
+      setSelectedSquare(square);
     } else {
       setPossibleMoves({});
+      setSelectedSquare(null);
     }
   };
 
@@ -183,6 +205,33 @@ function Game() {
     }
   };
 
+  const showPossibleMoves = (square: Square) => {
+    const moves: CustomSquareStyles = {};
+    const piece = gameRef.current.get(square);
+
+    if (piece && piece.color === gameRef.current.turn()) {
+      const legalMoves = gameRef.current.moves({
+        square,
+        verbose: true,
+      });
+
+      moves[square] = sourceSquareStyle;
+      legalMoves.forEach((move) => {
+        moves[move.to] = highlightSquare;
+      });
+    }
+
+    setPossibleMoves(moves);
+  };
+
+  const handlePieceDragBegin = (piece: Piece, sourceSquare: Square) => {
+    showPossibleMoves(sourceSquare);
+  };
+
+  const handlePieceDragEnd = () => {
+    setPossibleMoves({});
+  };
+
   return (
     <Container maxW="container.xl" py={8}>
       <Modal isOpen={isOpen} onClose={onClose} isCentered>
@@ -204,7 +253,14 @@ function Game() {
       <Flex gap={8} direction={{ base: "column", lg: "row" }}>
         <Box flex={1}>
           <GameControls gameMode={gameMode} setGameMode={setGameMode} onNewGame={handleNewGame} disabled={isThinking} />
-          <ChessBoard position={position} onPieceDrop={handlePieceDrop} onPieceClick={handlePieceClick} customSquareStyles={possibleMoves} />
+          <ChessBoard
+            position={position}
+            onPieceDrop={handlePieceDrop}
+            onPieceClick={handlePieceClick}
+            customSquareStyles={possibleMoves}
+            onPieceDragBegin={handlePieceDragBegin}
+            onPieceDragEnd={handlePieceDragEnd}
+          />
         </Box>
         <Box>
           <GameInfo currentPlayer={currentPlayer} moveHistory={moveHistory} isThinking={isThinking} />
