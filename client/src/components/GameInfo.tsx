@@ -1,6 +1,13 @@
-import { Box, Text, VStack } from '@chakra-ui/react'
+import { Box, Text, VStack } from "@chakra-ui/react";
+import { PlayerColor } from "../types";
 
-const GameInfo = ({ currentPlayer, moveHistory }) => {
+interface GameInfoProps {
+  currentPlayer: PlayerColor;
+  moveHistory: string[];
+  isThinking?: boolean;
+}
+
+const GameInfo = ({ currentPlayer, moveHistory, isThinking }: GameInfoProps) => {
   return (
     <VStack align="start" spacing={4} p={4} bg="gray.50" borderRadius="md">
       <Text fontSize="lg" fontWeight="bold">
@@ -15,7 +22,7 @@ const GameInfo = ({ currentPlayer, moveHistory }) => {
         </Box>
       </Box>
     </VStack>
-  )
-}
+  );
+};
 
-export default GameInfo
+export default GameInfo;

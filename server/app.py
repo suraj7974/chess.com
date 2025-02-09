@@ -7,7 +7,11 @@ from routes.game_routes import game_routes
 
 def create_app():
     app = Flask(__name__)
-    CORS(app)
+    
+    # Configure CORS for production
+    CORS(app, resources={
+        r"/api/*": {"origins": Config.CORS_ORIGINS}
+    })
 
     # Configure logging
     logging.basicConfig(
@@ -35,5 +39,10 @@ def create_app():
 
 app = create_app()
 
+# Remove debug flag for production
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=Config.PORT, debug=Config.DEBUG)
+    app.run(
+        host=Config.HOST,
+        port=Config.PORT,
+        debug=Config.DEBUG
+    )
