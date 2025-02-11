@@ -23,7 +23,7 @@ class Config:
     ]
 
     # Server configuration
-    PORT = int(os.getenv("PORT", 5000))
+    PORT = int(os.getenv("PORT", 3000))
     HOST = "0.0.0.0"
     LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
 
