@@ -30,7 +30,6 @@ class Config:
     # CORS settings (for production)
     CORS_ORIGINS = [
         "https://chess-com-bay.vercel.app/",
-        "https://your-frontend-domain.onrender.com",
         "http://localhost:5000",
         "http://localhost:5173",
     ]
