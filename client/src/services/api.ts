@@ -2,7 +2,7 @@ import axios from "axios";
 import { GameModeType } from "../types";
 
 const isDevelopment = import.meta.env.MODE === "development";
-const API_URL = isDevelopment ? "http://localhost:5000" : "https://your-backend-url.onrender.com";
+const API_URL = isDevelopment ? "http://localhost:5000" : "https://vercel.com/suraj-patels-projects-a4792e8b/chess-server";
 
 const API = axios.create({
   baseURL: API_URL,
