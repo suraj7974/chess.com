@@ -1,4 +1,7 @@
-const API_URL = "http://localhost:5000/api/stockfish";
+const isDevelopment = import.meta.env.MODE === "development";
+const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://vercel.com/suraj-patels-projects-a4792e8b/chess-server";
+
+const API_URL = `${BASE_URL}/api/stockfish`;
 
 interface StockfishResponse {
   status?: string;
