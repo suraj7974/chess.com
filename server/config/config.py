@@ -23,13 +23,13 @@ class Config:
     ]
 
     # Server configuration
-    PORT = int(os.getenv("PORT", 3000))
+    PORT = int(os.getenv("PORT", 5000))
     HOST = "0.0.0.0"
     LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
 
     # CORS settings (for production)
     CORS_ORIGINS = [
         "https://your-frontend-domain.onrender.com",
-        "http://localhost:3000",
+        "http://localhost:5000",
         "http://localhost:5173",
     ]
