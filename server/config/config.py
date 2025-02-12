@@ -16,7 +16,7 @@ class Config:
     # Stockfish configuration
     STOCKFISH_PATHS = [
         os.path.join(BASE_DIR, "models", "stockfish-ubuntu-x86-64-avx2"),
-        "/usr/games/stockfish",
+        "/usr/games/stockfish",  # Render's default installation path
         "/usr/bin/stockfish",
         "/usr/local/bin/stockfish",
         "stockfish",  # If in PATH
