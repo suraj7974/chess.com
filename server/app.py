@@ -9,7 +9,8 @@ from routes.game_routes import game_routes
 def create_app():
     app = Flask(__name__)
 
-    CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
+    # Configure CORS for production
+    CORS(app, resources={r"/api/*": {"origins": Config.CORS_ORIGINS}})
 
     # Configure logging
     logging.basicConfig(
