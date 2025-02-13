@@ -29,6 +29,7 @@ class Config:
 
     # CORS settings (for production)
     CORS_ORIGINS = [
-        "https://chess-com-bay.vercel.app",  # Only need one entry
+        "https://chess-com-bay.vercel.app",
         "http://localhost:5173",
+        "http://localhost:5000",
     ]
