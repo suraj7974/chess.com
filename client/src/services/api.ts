@@ -2,7 +2,7 @@ import axios from "axios";
 import { GameModeType } from "../types";
 
 const isDevelopment = import.meta.env.MODE === "development";
-const API_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-kappa.vercel.app"; // Correct backend URL
+const API_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-mu.vercel.app/"; // Correct backend URL
 
 const API = axios.create({
   baseURL: API_URL,
