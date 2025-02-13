@@ -10,7 +10,16 @@ def create_app():
     app = Flask(__name__)
 
     # Configure CORS for production
-    CORS(app, resources={r"/api/*": {"origins": Config.CORS_ORIGINS}})
+    CORS(
+        app,
+        resources={
+            r"/*": {
+                "origins": Config.CORS_ORIGINS,
+                "methods": ["GET", "POST", "OPTIONS"],
+                "allow_headers": ["Content-Type"],
+            }
+        },
+    )
 
     # Configure logging
     logging.basicConfig(

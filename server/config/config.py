@@ -16,7 +16,7 @@ class Config:
     # Stockfish configuration
     STOCKFISH_PATHS = [
         os.path.join(BASE_DIR, "models", "stockfish-ubuntu-x86-64-avx2"),
-        "/usr/games/stockfish",  # Render's default installation path
+        "/usr/games/stockfish",
         "/usr/bin/stockfish",
         "/usr/local/bin/stockfish",
         "stockfish",  # If in PATH
@@ -29,12 +29,6 @@ class Config:
 
     # CORS settings (for production)
     CORS_ORIGINS = [
-        "https://chess-com-bay.vercel.app",  # Frontend URL only
+        "https://chess-com-bay.vercel.app",  # Only need one entry
         "http://localhost:5173",
-        "http://localhost:5000",
-        "*",
-        # Local frontend development
     ]
-
-
-# CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
