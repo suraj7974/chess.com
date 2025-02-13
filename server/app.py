@@ -17,6 +17,7 @@ def create_app():
                 "origins": Config.CORS_ORIGINS,
                 "methods": ["GET", "POST", "OPTIONS"],
                 "allow_headers": ["Content-Type", "Authorization"],
+                "expose_headers": ["Content-Type"],
                 "supports_credentials": True,
             }
         },
@@ -39,6 +40,20 @@ def create_app():
     @app.errorhandler(500)
     def internal_error(error):
         return jsonify({"error": "Internal server error"}), 500
+
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        logging.error(f"Unhandled exception: {str(e)}")
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "Internal server error",
+                    "details": str(e),
+                }
+            ),
+            500,
+        )
 
     @app.route("/")
     def home():

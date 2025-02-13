@@ -13,6 +13,9 @@ export const checkStockfishHealth = async (): Promise<boolean> => {
   try {
     console.log("Checking Stockfish health...");
     const response = await fetch(`${API_URL}/health`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
     const data = await response.json();
     console.log("Health check response:", data);
     return data.status === "ok";
@@ -30,7 +33,6 @@ export const getStockfishMove = async (fen: string, skillLevel: number = 20): Pr
       throw new Error("Stockfish engine is not available");
     }
 
-    console.log("Requesting move for FEN:", fen);
     const response = await fetch(`${API_URL}/move`, {
       method: "POST",
       headers: {
@@ -39,12 +41,13 @@ export const getStockfishMove = async (fen: string, skillLevel: number = 20): Pr
       body: JSON.stringify({ fen, skillLevel }),
     });
 
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
     console.log("Server response:", data);
-
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to get move");
-    }
 
     if (!data.move) {
       throw new Error("No move returned from server");
