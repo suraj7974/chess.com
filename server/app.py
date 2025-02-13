@@ -21,14 +21,28 @@ def create_app():
         app,
         resources={
             r"/*": {
-                "origins": Config.CORS_ORIGINS,
+                "origins": "*",  # Temporarily allow all origins for testing
                 "methods": ["GET", "POST", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization"],
+                "allow_headers": ["Content-Type", "Authorization", "Origin", "Accept"],
                 "expose_headers": ["Content-Type"],
                 "supports_credentials": True,
+                "send_wildcard": False,
             }
         },
     )
+
+    # Add CORS headers to all responses
+    @app.after_request
+    def after_request(response):
+        origin = request.headers.get("Origin")
+        if origin in Config.CORS_ORIGINS:
+            response.headers.add("Access-Control-Allow-Origin", origin)
+            response.headers.add(
+                "Access-Control-Allow-Headers", "Content-Type,Authorization"
+            )
+            response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+            response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response
 
     # Configure logging
     logging.basicConfig(
