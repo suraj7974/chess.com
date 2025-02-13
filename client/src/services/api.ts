@@ -2,7 +2,7 @@ import axios from "axios";
 import { GameModeType } from "../types";
 
 const isDevelopment = import.meta.env.MODE === "development";
-const API_URL = isDevelopment ? "http://localhost:5000/api/stockfish" : "https://vercel.com/suraj-patels-projects-a4792e8b/chess-server/api/stockfish";
+const API_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-kappa.vercel.app"; // Fix: Use actual deployed URL
 
 const API = axios.create({
   baseURL: API_URL,
@@ -21,9 +21,9 @@ interface MoveResponse {
   move?: string;
 }
 
-export const startGame = (playerType: GameModeType) => API.post<GameResponse>("/api/game/start-game", { playerType });
+export const startGame = (playerType: GameModeType) => API.post<GameResponse>("start-game", { playerType });
 
-export const getMove = (gameId: string, move: string) => API.post<MoveResponse>("/api/game/make-move", { gameId, move });
+export const getMove = (gameId: string, move: string) => API.post<MoveResponse>("make-move", { gameId, move });
 
 // Add error interceptor
 API.interceptors.response.use(

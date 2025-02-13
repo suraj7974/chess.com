@@ -1,5 +1,5 @@
 const isDevelopment = import.meta.env.MODE === "development";
-const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://vercel.com/suraj-patels-projects-a4792e8b/chess-server";
+const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-kappa.vercel.app"; // Fix: Use actual deployed URL
 
 const API_URL = `${BASE_URL}/api/stockfish`;
 
