@@ -32,5 +32,9 @@ class Config:
         "https://chess-com-bay.vercel.app",  # Frontend URL only
         "http://localhost:5173",
         "http://localhost:5000",
+        "*",
         # Local frontend development
     ]
+
+
+# CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins
