@@ -1,5 +1,5 @@
 const isDevelopment = import.meta.env.MODE === "development";
-const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-kappa.vercel.app"; // Correct backend URL
+const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chess-je2fzb8hw-suraj-patels-projects-a4792e8b.vercel.app"; // Correct backend URL
 
 const API_URL = `${BASE_URL}/api/stockfish`;
 
@@ -12,7 +12,14 @@ interface StockfishResponse {
 export const checkStockfishHealth = async (): Promise<boolean> => {
   try {
     console.log("Checking Stockfish health...");
-    const response = await fetch(`${API_URL}/health`);
+    console.log("API URL:", `${API_URL}/health`); // Add debug logging
+    const response = await fetch(`${API_URL}/health`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+    });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -21,6 +28,7 @@ export const checkStockfishHealth = async (): Promise<boolean> => {
     return data.status === "ok";
   } catch (error) {
     console.error("Health check failed:", error);
+    console.error("Full API URL:", `${API_URL}/health`); // Add debug logging
     return false;
   }
 };

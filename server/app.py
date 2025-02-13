@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 import logging
 from config.config import Config
@@ -8,6 +8,13 @@ from routes.game_routes import game_routes
 
 def create_app():
     app = Flask(__name__)
+
+    # Add request logging
+    @app.before_request
+    def log_request_info():
+        logging.debug("Headers: %s", request.headers)
+        logging.debug("Body: %s", request.get_data())
+        logging.debug("URL: %s", request.url)
 
     # Configure CORS for production
     CORS(
@@ -58,6 +65,17 @@ def create_app():
     @app.route("/")
     def home():
         return jsonify({"message": "Chess game server is running"})
+
+    @app.route("/debug-info")
+    def debug_info():
+        return jsonify(
+            {
+                "env": Config.ENV,
+                "debug": Config.DEBUG,
+                "cors_origins": Config.CORS_ORIGINS,
+                "stockfish_paths": Config.STOCKFISH_PATHS,
+            }
+        )
 
     return app
 
