@@ -1,6 +1,6 @@
 const isDevelopment = import.meta.env.MODE === "development";
 
-const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-mu.vercel.app"; // Remove trailing slash
+const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-mu.vercel.app/"; // Correct backend URL
 
 const API_URL = `${BASE_URL}/api/stockfish`;
 
