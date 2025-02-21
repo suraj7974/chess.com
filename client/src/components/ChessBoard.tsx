@@ -17,7 +17,7 @@ function ChessBoard({ onPieceDrop, position, onPieceClick, customSquareStyles, o
   const [isMobile] = useMediaQuery("(max-width: 480px)");
   const [isTablet] = useMediaQuery("(max-width: 768px)");
 
-  const boardWidth = isMobile ? window.innerWidth * 0.95 : isTablet ? window.innerWidth * 0.8 : 600;
+  const boardWidth = isMobile ? window.innerWidth * 0.85 : isTablet ? window.innerWidth * 0.7 : 500;
 
   const customBoardStyle = {
     borderRadius: "4px",
