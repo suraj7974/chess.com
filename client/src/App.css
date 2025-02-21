@@ -51,7 +51,7 @@
   align-items: center;
   gap: 1rem;
   width: 100%;
-  max-width: 800px;
+  max-width: 700px; 
   margin: 0 auto;
   min-height: 100vh;
   padding: 1rem;
@@ -70,7 +70,7 @@
   justify-content: center;
   align-items: center;
   width: 100%;
-  max-width: 600px;
+  max-width: 500px; 
   margin: 0 auto;
 }
 
@@ -90,7 +90,6 @@
   padding: 1rem;
 }
 
-/* Responsive breakpoints */
 @media (max-width: 768px) {
   #root {
     padding: 0.5rem;
@@ -105,7 +104,7 @@
   }
 
   .chessboard-wrapper {
-    width: 80vw;
+    width: 70vw;
     max-width: none;
   }
 
@@ -127,7 +126,7 @@
   }
 
   .chessboard-wrapper {
-    width: 95vw;
+    width: 85vw; 
   }
 
   .game-info {
@@ -143,7 +142,7 @@
   }
 
   .chessboard-wrapper {
-    width: 80vh;
+    width: 70vh;
     max-width: none;
   }
 
