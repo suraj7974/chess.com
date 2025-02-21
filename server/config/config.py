@@ -29,12 +29,7 @@ class Config:
 
     # CORS settings (for production)
     CORS_ORIGINS = [
-        "https://chess-com-bay.vercel.app",  # Frontend URL only
+        "https://chess-com-bay.vercel.app",
         "http://localhost:5173",
         "http://localhost:5000",
-        "*",
-        # Local frontend development
     ]
-
-
-# CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins

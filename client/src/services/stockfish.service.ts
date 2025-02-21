@@ -1,5 +1,6 @@
 const isDevelopment = import.meta.env.MODE === "development";
-const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://vercel.com/suraj-patels-projects-a4792e8b/chess-server";
+
+const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-mu.vercel.app/"; // Correct backend URL
 
 const API_URL = `${BASE_URL}/api/stockfish`;
 
@@ -12,7 +13,25 @@ interface StockfishResponse {
 export const checkStockfishHealth = async (): Promise<boolean> => {
   try {
     console.log("Checking Stockfish health...");
-    const response = await fetch(`${API_URL}/health`);
+    const url = `${API_URL}/health`;
+    console.log("API URL:", url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Origin: window.location.origin,
+      },
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      console.error("Response status:", response.status);
+      console.error("Response headers:", [...response.headers.entries()]);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
     console.log("Health check response:", data);
     return data.status === "ok";
@@ -30,7 +49,6 @@ export const getStockfishMove = async (fen: string, skillLevel: number = 20): Pr
       throw new Error("Stockfish engine is not available");
     }
 
-    console.log("Requesting move for FEN:", fen);
     const response = await fetch(`${API_URL}/move`, {
       method: "POST",
       headers: {
@@ -39,12 +57,13 @@ export const getStockfishMove = async (fen: string, skillLevel: number = 20): Pr
       body: JSON.stringify({ fen, skillLevel }),
     });
 
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
     console.log("Server response:", data);
-
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to get move");
-    }
 
     if (!data.move) {
       throw new Error("No move returned from server");
