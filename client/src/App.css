@@ -53,12 +53,25 @@
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
+  min-height: 100vh;
+  padding: 1rem;
+  box-sizing: border-box;
 }
 
 .chessboard {
   width: 100%;
   max-width: 600px;
   aspect-ratio: 1;
+}
+
+.chessboard-wrapper {
+  aspect-ratio: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .controls {
@@ -83,13 +96,23 @@
     padding: 0.5rem;
   }
 
+  .chess-container {
+    padding: 0.5rem;
+  }
+
   .chessboard {
     max-width: 90vw;
+  }
+
+  .chessboard-wrapper {
+    width: 80vw;
+    max-width: none;
   }
 
   .controls {
     flex-direction: column;
     align-items: center;
+    padding: 0.5rem;
   }
 
   button {
@@ -103,7 +126,28 @@
     max-width: 95vw;
   }
 
+  .chessboard-wrapper {
+    width: 95vw;
+  }
+
   .game-info {
     font-size: 0.9rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .chess-container {
+    flex-direction: row;
+    align-items: center;
+    padding: 0.5rem;
+  }
+
+  .chessboard-wrapper {
+    width: 80vh;
+    max-width: none;
+  }
+
+  .controls {
+    width: auto;
   }
 }
