@@ -22,6 +22,10 @@ class Config:
         "stockfish",  # If in PATH
     ]
 
+    # LLM API settings
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "mistral-7b-instruct")
+
     # Server configuration
     PORT = int(os.getenv("PORT", 5000))
     HOST = "0.0.0.0"

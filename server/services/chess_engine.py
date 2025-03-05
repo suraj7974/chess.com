@@ -1,21 +1,22 @@
 import chess
 import chess.engine
 
+
 class ChessEngine:
+    """Simple chess engine wrapper"""
+
     def __init__(self):
-        self.games = {}
+        self.board = chess.Board()
 
-    def start_game(self):
-        game_id = len(self.games) + 1
-        self.games[game_id] = chess.Board()
-        return game_id
+    def reset(self):
+        self.board = chess.Board()
 
-    def make_move(self, game_id, move):
-        board = self.games.get(game_id)
-        if not board:
-            return {'error': 'Invalid game ID'}
+    def make_move(self, move_str):
         try:
-            board.push_san(move)
-            return {'board': board.fen(), 'status': 'Move made'}
+            move = self.board.parse_uci(move_str)
+            if move in self.board.legal_moves:
+                self.board.push(move)
+                return True
+            return False
         except ValueError:
-            return {'error': 'Invalid move'}
+            return False

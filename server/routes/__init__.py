@@ -1,2 +1,1 @@
-
-# Empty file to make routes directory a Python package
+# This file makes the routes directory a Python package

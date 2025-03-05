@@ -1,9 +1,16 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import logging
+import os
+import sys
+
+# Add the current directory to the path to ensure imports work
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from config.config import Config
 from routes.stockfish_routes import stockfish_routes
 from routes.game_routes import game_routes
+from routes.groq_routes import groq_routes  # Make sure this is imported
 
 
 def create_app():
@@ -50,9 +57,26 @@ def create_app():
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
 
-    # Register blueprints
+    # Register blueprints - ensure all are registered
+    print("Registering blueprints...")
     app.register_blueprint(stockfish_routes, url_prefix="/api/stockfish")
     app.register_blueprint(game_routes, url_prefix="/api/game")
+    app.register_blueprint(groq_routes, url_prefix="/api/groq")
+    print("Blueprints registered")
+
+    # List all registered routes for debugging
+    @app.route("/routes")
+    def list_routes():
+        routes = []
+        for rule in app.url_map.iter_rules():
+            routes.append(
+                {
+                    "endpoint": rule.endpoint,
+                    "methods": list(rule.methods),
+                    "path": str(rule),
+                }
+            )
+        return jsonify({"routes": routes})
 
     @app.errorhandler(404)
     def not_found(error):
@@ -96,6 +120,9 @@ def create_app():
 
 app = create_app()
 
-# Remove debug flag for production
+# Add this outside the function to help with debugging
 if __name__ == "__main__":
+    print(f"Python version: {sys.version}")
+    print(f"Running in directory: {os.getcwd()}")
+    print(f"Registered routes: {[r for r in app.url_map.iter_rules()]}")
     app.run(host=Config.HOST, port=Config.PORT, debug=Config.DEBUG)
