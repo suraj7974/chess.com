@@ -1,3 +1,6 @@
-export type GameModeType = "human" | "stockfish";
+export type GameModeType = "stockfish" | "groq" | "human";
 export type PlayerColor = "White" | "Black";
-export type CustomSquareStyles = { [key: string]: React.CSSProperties };
+
+export interface CustomSquareStyles {
+  [square: string]: React.CSSProperties;
+}
