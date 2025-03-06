@@ -2,7 +2,7 @@ import { Chess, Square } from "chess.js";
 import { GroqModel } from "../types";
 
 const isDevelopment = import.meta.env.MODE === "development";
-const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chess-server-mu.vercel.app";
+const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chessserver.vercel.app";
 
 const API_URL = `${BASE_URL}/api/groq`;
 
