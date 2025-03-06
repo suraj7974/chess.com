@@ -8,11 +8,15 @@ import "./App.css";
 function App() {
   const [gameMode, setGameMode] = useState<GameModeType | null>(null);
 
+  console.log("Current game mode:", gameMode); // Add debug logging
+
   const handleSelectMode = (mode: GameModeType) => {
+    console.log(`Selecting game mode: ${mode}`);
     setGameMode(mode);
   };
 
   const handleRestartGame = () => {
+    console.log("Restarting game / changing opponent");
     setGameMode(null);
   };
 

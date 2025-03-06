@@ -18,11 +18,11 @@ const GameModeSelector = ({ onSelect }: GameModeSelectorProps) => {
         </Button>
 
         <Button colorScheme="purple" size="lg" width="full" onClick={() => onSelect("groq")}>
-          Play against Mistral (AI)
+          Play against AI
         </Button>
 
         <Button colorScheme="green" size="lg" width="full" onClick={() => onSelect("human")}>
-          Play against Human
+          Play with friend
         </Button>
       </VStack>
     </Box>
