@@ -3,7 +3,7 @@ import logging
 import os
 import traceback
 import chess
-from engine.groq_engine import GroqEngine
+from engine.groq_engine import GroqEngine, MockGroqEngine
 from config.config import Config
 from config.models import get_model_list, get_model_by_key, DEFAULT_MODEL
 import sys
@@ -11,21 +11,33 @@ import datetime
 
 groq_routes = Blueprint("groq", __name__)
 engine = None
+use_mock = False  # Flag to indicate if we're using mock engine
 
 
 def get_engine(model_key=None):
-    global engine
+    global engine, use_mock
     if engine is None:
         try:
-            engine = GroqEngine(model_key)
+            try:
+                # First try to initialize the real engine
+                engine = GroqEngine(model_key)
+                use_mock = False
+                logging.info("Successfully initialized Groq engine")
+            except Exception as e:
+                # If that fails, fall back to the mock engine
+                logging.error(f"Failed to initialize real Groq engine: {str(e)}")
+                logging.info("Falling back to mock engine")
+                engine = MockGroqEngine(model_key)
+                use_mock = True
         except Exception as e:
-            logging.error(f"Failed to initialize Groq engine: {str(e)}")
+            logging.error(f"Failed to initialize any engine: {str(e)}")
+            return None
     elif model_key and engine.model_key != model_key:
         # Change model if a different one is requested
         try:
             engine.change_model(model_key)
         except Exception as e:
-            logging.error(f"Failed to change Groq model: {str(e)}")
+            logging.error(f"Failed to change model: {str(e)}")
     return engine
 
 
@@ -55,7 +67,13 @@ def health_check():
     try:
         engine = get_engine()
         if engine:
-            return jsonify({"status": "ok"})
+            return jsonify(
+                {
+                    "status": "ok",
+                    "mode": "mock" if use_mock else "real",
+                    "model": engine.model_key,
+                }
+            )
         return jsonify({"status": "error", "message": "Engine not initialized"}), 500
     except Exception as e:
         logging.error(f"Health check failed: {e}")

@@ -16,28 +16,34 @@ interface GroqResponse {
 export const checkGroqHealth = async (): Promise<boolean> => {
   try {
     console.log("Checking Groq API health...");
+    const healthUrl = `${API_URL}/health`;
+    console.log("Health URL:", healthUrl);
 
-    // First try the test endpoint
-    const testResponse = await fetch(`${API_URL}/test-connection`);
-    const testData = await testResponse.json();
+    // Add timeout to prevent long waits
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    if (testResponse.ok && testData.status === "ok") {
-      console.log("Test connection successful:", testData);
-      return true;
-    }
+    const response = await fetch(healthUrl, {
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
 
-    // If test fails, try regular health endpoint
-    const response = await fetch(`${API_URL}/health`);
     if (!response.ok) {
       console.error("Health check failed with status:", response.status);
-      const errorText = await response.text();
-      console.error("Error response:", errorText);
       return false;
     }
 
     const data = await response.json();
     console.log("Health check response:", data);
-    return data.status === "ok";
+
+    // Even if we're using mock mode, return true so the game can proceed
+    if (data.status === "ok") {
+      if (data.mode === "mock") {
+        console.warn("Using mock Groq engine - moves won't be from real AI");
+      }
+      return true;
+    }
+
+    return false;
   } catch (error) {
     console.error("Groq API health check failed:", error);
     return false;

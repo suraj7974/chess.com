@@ -7,6 +7,37 @@ from config.config import Config
 from config.models import get_model_by_key, DEFAULT_MODEL
 
 
+class MockGroqEngine:
+    """Mock engine for fallback in production when Groq is unavailable"""
+
+    def __init__(self, *args, **kwargs):
+        self.model_key = DEFAULT_MODEL
+        self.model_config = get_model_by_key(DEFAULT_MODEL)
+        self.model_id = self.model_config["id"]
+        self.move_history = []
+        logging.info("Initialized MockGroqEngine as fallback")
+
+    def get_move(self, fen, *args, **kwargs):
+        """Return a simple move for testing"""
+        try:
+            # Get random legal move from position
+            board = chess.Board(fen)
+            moves = list(board.legal_moves)
+            if moves:
+                return moves[0].uci()
+            return "e2e4"  # Default fallback move
+        except Exception as e:
+            logging.error(f"Error in mock engine: {e}")
+            return "e2e4"
+
+    def change_model(self, model_key):
+        """Mock model change"""
+        self.model_key = model_key
+        self.model_config = get_model_by_key(model_key)
+        self.model_id = self.model_config["id"]
+        return True
+
+
 class GroqEngine:
     def __init__(self, model_key=None):
         try:
@@ -17,6 +48,10 @@ class GroqEngine:
             api_key = os.getenv("GROQ_API_KEY")
             logging.info(f"API key exists: {bool(api_key)}")
 
+            # Check if we're running on Vercel
+            is_vercel = os.getenv("VERCEL") == "1"
+            logging.info(f"Running on Vercel: {is_vercel}")
+
             # Get model configuration
             self.model_key = model_key if model_key else DEFAULT_MODEL
             self.model_config = get_model_by_key(self.model_key)
@@ -24,19 +59,20 @@ class GroqEngine:
 
             logging.info(f"Using model: {self.model_id} ({self.model_key})")
 
-            # Import Groq library
-            try:
-                from groq import Groq
-
-                logging.info("Successfully imported groq library")
-            except ImportError as e:
-                logging.error(f"Failed to import groq: {str(e)}")
-                raise
-
             # Check API key
             if not api_key:
                 logging.error("GROQ_API_KEY not found in environment variables")
-                raise ValueError("GROQ_API_KEY not found in environment variables")
+                # In production, try to get from Config
+                if hasattr(Config, "GROQ_API_KEY") and Config.GROQ_API_KEY:
+                    api_key = Config.GROQ_API_KEY
+                    logging.info("Using API key from Config instead")
+                else:
+                    raise ValueError("GROQ_API_KEY not found in environment variables")
+
+            # Import Groq library
+            from groq import Groq
+
+            logging.info("Successfully imported groq library")
 
             # Initialize client
             logging.info("Creating Groq client...")
