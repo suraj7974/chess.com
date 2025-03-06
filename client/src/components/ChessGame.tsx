@@ -3,8 +3,9 @@ import { Chess, Square } from "chess.js";
 import { Button, VStack, Text, useToast } from "@chakra-ui/react";
 import ChessBoard from "./ChessBoard";
 import { getStockfishMove } from "../services/stockfish.service";
-import { getGroqMove, uciToSquares } from "../services/groq.service";
-import { GameModeType, CustomSquareStyles } from "../types";
+import { getGroqMove, getGroqModels, uciToSquares } from "../services/groq.service";
+import { GameModeType, CustomSquareStyles, GroqModel } from "../types";
+import ModelSelector from "./ModelSelector";
 
 interface ChessGameProps {
   gameMode: GameModeType;
@@ -18,12 +19,46 @@ const ChessGame = ({ gameMode, onRestartGame }: ChessGameProps) => {
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [selectedPiece, setSelectedPiece] = useState<Square | null>(null);
   const [customSquareStyles, setCustomSquareStyles] = useState<CustomSquareStyles>({});
+  const [groqModels, setGroqModels] = useState<GroqModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("llama3");
   const toast = useToast();
 
   // Update the chessboard position when the game changes
   useEffect(() => {
     setPosition(game.fen());
   }, [game]);
+
+  // Fetch available Groq models on component mount
+  useEffect(() => {
+    if (gameMode === "groq") {
+      const fetchModels = async () => {
+        try {
+          console.log("Requesting Groq models...");
+          const result = await getGroqModels();
+          console.log("Received models:", result);
+
+          if (result.models && result.models.length > 0) {
+            console.log("Setting models:", result.models.map((m) => m.name).join(", "));
+            setGroqModels(result.models);
+            setSelectedModel(result.default);
+          } else {
+            console.warn("No models returned");
+          }
+        } catch (error) {
+          console.error("Failed to fetch models:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load AI models",
+            status: "error",
+            duration: 3000,
+            isClosable: true,
+          });
+        }
+      };
+
+      fetchModels();
+    }
+  }, [gameMode, toast]);
 
   // Reset styles when starting a new move
   const resetStyles = () => {
@@ -67,8 +102,8 @@ const ChessGame = ({ gameMode, onRestartGame }: ChessGameProps) => {
       if (gameMode === "stockfish") {
         move = await getStockfishMove(game.fen());
       } else if (gameMode === "groq") {
-        // Pass the move history for context
-        move = await getGroqMove(game.fen(), moveHistory);
+        // Pass the move history and selected model for context
+        move = await getGroqMove(game.fen(), moveHistory, selectedModel);
       } else {
         // This is for human vs human mode
         setIsPlayerTurn(true);
@@ -100,7 +135,7 @@ const ChessGame = ({ gameMode, onRestartGame }: ChessGameProps) => {
       });
       setIsPlayerTurn(true);
     }
-  }, [game, gameMode, makeMove, moveHistory, toast]);
+  }, [game, gameMode, makeMove, moveHistory, selectedModel, toast]);
 
   // Get computer move when it's their turn
   useEffect(() => {
@@ -223,11 +258,31 @@ const ChessGame = ({ gameMode, onRestartGame }: ChessGameProps) => {
     return "Human";
   };
 
+  // Handle model change
+  const handleModelChange = (modelKey: string) => {
+    console.log(`Changing model to: ${modelKey}`);
+    setSelectedModel(modelKey);
+
+    // Find the selected model details
+    const selectedModelData = groqModels.find((m) => m.key === modelKey);
+    console.log("Selected model details:", selectedModelData);
+
+    toast({
+      title: "Model Changed",
+      description: `Now playing against ${selectedModelData?.name || modelKey}`,
+      status: "info",
+      duration: 2000,
+      isClosable: true,
+    });
+  };
+
   return (
     <div className="chess-container">
       <Text fontSize="2xl" mb={2}>
         Chess Game vs {getOpponentName()}
       </Text>
+
+      {gameMode === "groq" && groqModels.length > 0 && <ModelSelector models={groqModels} selectedModel={selectedModel} onModelChange={handleModelChange} />}
 
       <div className="chessboard-wrapper">
         <ChessBoard
