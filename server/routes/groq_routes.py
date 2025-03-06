@@ -5,6 +5,7 @@ import traceback
 import chess
 from engine.groq_engine import GroqEngine
 from config.config import Config
+from config.models import get_model_list, get_model_by_key, DEFAULT_MODEL
 import sys
 import datetime
 
@@ -12,14 +13,41 @@ groq_routes = Blueprint("groq", __name__)
 engine = None
 
 
-def get_engine():
+def get_engine(model_key=None):
     global engine
     if engine is None:
         try:
-            engine = GroqEngine()
+            engine = GroqEngine(model_key)
         except Exception as e:
             logging.error(f"Failed to initialize Groq engine: {str(e)}")
+    elif model_key and engine.model_key != model_key:
+        # Change model if a different one is requested
+        try:
+            engine.change_model(model_key)
+        except Exception as e:
+            logging.error(f"Failed to change Groq model: {str(e)}")
     return engine
+
+
+@groq_routes.route("/models", methods=["GET"])
+def list_models():
+    """List available Groq models"""
+    try:
+        # Log that the endpoint was called
+        logging.info("Models endpoint called")
+
+        # Get models and log them
+        models = get_model_list()
+        logging.info(f"Retrieved {len(models)} models: {[m['key'] for m in models]}")
+
+        # Return models
+        response = {"models": models, "default": DEFAULT_MODEL}
+        logging.info(f"Returning response: {response}")
+        return jsonify(response)
+    except Exception as e:
+        logging.error(f"Error listing models: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 @groq_routes.route("/health", methods=["GET"])
@@ -37,13 +65,17 @@ def health_check():
 @groq_routes.route("/move", methods=["POST"])
 def get_move():
     try:
-        engine = get_engine()
-        if not engine:
-            return jsonify({"error": "Groq engine not available"}), 503
-
         data = request.json
         if not data or "fen" not in data:
             return jsonify({"error": "Missing FEN position"}), 400
+
+        # Get model key if provided
+        model_key = data.get("model", DEFAULT_MODEL)
+
+        # Get or initialize engine with the selected model
+        engine = get_engine(model_key)
+        if not engine:
+            return jsonify({"error": "Groq engine not available"}), 503
 
         fen = data["fen"]
         previous_moves = data.get("previousMoves", [])
@@ -56,7 +88,13 @@ def get_move():
 
         # Get the move from the Groq engine
         move = engine.get_move(fen, previous_moves)
-        return jsonify({"move": move})
+        return jsonify(
+            {
+                "move": move,
+                "model": engine.model_key,
+                "modelName": engine.model_config["name"],
+            }
+        )
     except Exception as e:
         logging.error(f"Move calculation failed: {e}")
         return jsonify({"error": str(e)}), 500

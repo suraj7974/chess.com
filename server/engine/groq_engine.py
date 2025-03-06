@@ -4,18 +4,25 @@ import chess
 import traceback
 import sys
 from config.config import Config
+from config.models import get_model_by_key, DEFAULT_MODEL
 
 
 class GroqEngine:
-    def __init__(self):
+    def __init__(self, model_key=None):
         try:
             # Print debug information
             logging.info("Initializing Groq engine...")
+
+            # Get API key
             api_key = os.getenv("GROQ_API_KEY")
             logging.info(f"API key exists: {bool(api_key)}")
-            logging.info(
-                f"API key first few chars: {api_key[:5] if api_key else None}..."
-            )
+
+            # Get model configuration
+            self.model_key = model_key if model_key else DEFAULT_MODEL
+            self.model_config = get_model_by_key(self.model_key)
+            self.model_id = self.model_config["id"]
+
+            logging.info(f"Using model: {self.model_id} ({self.model_key})")
 
             # Import Groq library
             try:
@@ -24,30 +31,23 @@ class GroqEngine:
                 logging.info("Successfully imported groq library")
             except ImportError as e:
                 logging.error(f"Failed to import groq: {str(e)}")
-                print(f"ERROR: Failed to import groq library: {str(e)}")
-                print("Try installing with: pip install groq")
                 raise
 
             # Check API key
             if not api_key:
                 logging.error("GROQ_API_KEY not found in environment variables")
-                print("ERROR: GROQ_API_KEY not found in environment variables")
-                print("Current env vars:", list(os.environ.keys()))
                 raise ValueError("GROQ_API_KEY not found in environment variables")
 
             # Initialize client
             logging.info("Creating Groq client...")
             self.client = Groq(api_key=api_key)
-            self.model = os.getenv("GROQ_MODEL", "llama3-8b-8192")
-            logging.info(f"Using model: {self.model}")
             self.move_history = []
 
             # Test connection with simple query
-            logging.info(f"Testing connection with model: {self.model}")
-            print(f"Testing Groq connection with model: {self.model}")
+            logging.info(f"Testing connection with model: {self.model_id}")
 
             test_response = self.client.chat.completions.create(
-                model=self.model,
+                model=self.model_id,
                 messages=[{"role": "user", "content": "Hello"}],
                 max_tokens=5,
             )
@@ -55,16 +55,22 @@ class GroqEngine:
             logging.info(
                 f"Groq test response: {test_response.choices[0].message.content}"
             )
-            print(
-                f"Groq test successful, response: {test_response.choices[0].message.content}"
+            logging.info(
+                f"Groq engine initialized successfully with model {self.model_id}"
             )
-            logging.info(f"Groq engine initialized successfully")
 
         except Exception as e:
             logging.error(f"Failed to initialize Groq engine: {str(e)}")
-            print(f"ERROR initializing Groq engine: {str(e)}")
             traceback.print_exc()
             raise
+
+    def change_model(self, model_key):
+        """Change the model being used"""
+        self.model_key = model_key
+        self.model_config = get_model_by_key(model_key)
+        self.model_id = self.model_config["id"]
+        logging.info(f"Changed model to: {self.model_id} ({model_key})")
+        return True
 
     def _format_board(self, board):
         """Format the board for the LLM in an easy-to-understand way."""
@@ -108,7 +114,7 @@ class GroqEngine:
         return system_message, user_message
 
     def get_move(self, fen, previous_moves=None, invalid_move=None):
-        """Get a move from the Groq API with Mistral model."""
+        """Get a move from the Groq API"""
         system_message, user_message = self._create_prompt(
             fen, previous_moves, invalid_move
         )
@@ -116,14 +122,17 @@ class GroqEngine:
         try:
             logging.info(f"Sending request to Groq API with prompt: {user_message}")
 
+            # Get temperature from model config
+            temperature = self.model_config.get("temperature", 0.2)
+
             response = self.client.chat.completions.create(
-                model=self.model,
+                model=self.model_id,  # Use current model ID
                 messages=[
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": user_message},
                 ],
                 max_tokens=10,
-                temperature=0.2,
+                temperature=temperature,
             )
 
             raw_move = response.choices[0].message.content.strip()
