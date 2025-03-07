@@ -29,14 +29,16 @@ try:
     from groq import Groq
 
     print("✓ Successfully imported groq")
+    print(f"Groq version: {getattr(Groq, '__version__', 'unknown')}")
 except ImportError as e:
     print(f"✗ Failed to import groq: {e}")
     print("Try installing with: pip install groq")
     sys.exit(1)
 
-# Try creating a client
+# Try creating a client without proxies
 try:
     print("Creating Groq client...")
+    # Only pass the API key without any additional parameters
     client = Groq(api_key=api_key)
     print("✓ Successfully created Groq client")
 except Exception as e:

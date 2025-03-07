@@ -10,7 +10,7 @@ exceptiongroup==1.2.2
 flask==2.0.1
 flask-cors==3.0.10
 gunicorn==20.1.0
-groq==0.4.1
+groq
 h11==0.14.0
 httpcore==1.0.7
 httpx==0.28.1

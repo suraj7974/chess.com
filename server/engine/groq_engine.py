@@ -74,7 +74,7 @@ class GroqEngine:
 
             logging.info("Successfully imported groq library")
 
-            # Initialize client
+            # Initialize client - only pass API key, no other parameters
             logging.info("Creating Groq client...")
             self.client = Groq(api_key=api_key)
             self.move_history = []
