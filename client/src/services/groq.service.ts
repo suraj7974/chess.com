@@ -76,18 +76,13 @@ export const getGroqModels = async (): Promise<{ models: GroqModel[]; default: s
   } catch (error) {
     console.error("Failed to fetch Groq models:", error);
 
-    // Return hardcoded fallback data with all the models
+    // Return hardcoded fallback data with updated models (removed Qwen)
     return {
       models: [
         {
           key: "deepseek",
           name: "Deepseek R1 (70B)",
           description: "Powerful 70B model with excellent reasoning capabilities",
-        },
-        {
-          key: "qwen",
-          name: "Qwen QWQ (32B)",
-          description: "Good balance of performance and speed",
         },
         {
           key: "mixtral",

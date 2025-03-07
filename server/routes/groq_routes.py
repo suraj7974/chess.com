@@ -106,6 +106,16 @@ def get_move():
 
         # Get the move from the Groq engine
         move = engine.get_move(fen, previous_moves)
+
+        # Double-check that the move is valid
+        if not _is_valid_uci_move(move, fen):
+            logging.warning(f"Invalid move returned by engine: {move}")
+            # Get a random valid move as fallback
+            board = chess.Board(fen)
+            if list(board.legal_moves):
+                move = list(board.legal_moves)[0].uci()
+                logging.info(f"Using fallback random move: {move}")
+
         return jsonify(
             {
                 "move": move,
@@ -116,6 +126,19 @@ def get_move():
     except Exception as e:
         logging.error(f"Move calculation failed: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+def _is_valid_uci_move(move_str, fen):
+    """Validate if a string is a valid UCI move for the given position"""
+    try:
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(move_str)
+        return move in board.legal_moves
+    except ValueError:
+        return False
+    except Exception as e:
+        logging.error(f"Error validating move: {e}")
+        return False
 
 
 @groq_routes.route("/test-connection", methods=["GET"])

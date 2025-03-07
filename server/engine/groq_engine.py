@@ -122,9 +122,26 @@ class GroqEngine:
         board = chess.Board(fen)
         formatted_board = self._format_board(board)
 
+        # Improved system message with clearer instructions
         system_message = """
-        You are a chess grandmaster AI. Your task is to analyze the chess position shown below and suggest the best move for the side to play (BLACK).
-        Return ONLY the move in standard algebraic notation (e.g., "e4", "Nf3", "Bxc6"). Do not explain your reasoning, don't include any other text.
+        You are a chess grandmaster AI analyzing chess positions. Your task is to calculate the best move for BLACK in the given position.
+        
+        IMPORTANT: You must ONLY respond with a single chess move in standard algebraic notation (e.g., "e5", "Nf6", "Bxc6", "O-O").
+        Do not include any explanation, discussion, or additional text whatsoever.
+        Do not say words like "okay", "alright", "I'll play", etc.
+        Just provide the move notation and nothing else.
+        
+        Example correct responses:
+        "e5"
+        "Nf6"
+        "Bxc6"
+        "O-O"
+        
+        Example incorrect responses:
+        "I'll play e5"
+        "e5 looks good"
+        "Okay, Nf6"
+        "I choose Bxc6"
         """
 
         user_message = f"Here is the current chess position (you are playing as BLACK):\n\n{formatted_board}\n\n"
@@ -136,16 +153,14 @@ class GroqEngine:
                 history_text += f"{i+1}. {move}\n"
             user_message += f"{history_text}\n"
 
-        # Add invalid move feedback
+        # Add invalid move feedback with explicit instructions
         if invalid_move:
-            user_message += f"Your last move '{invalid_move}' was invalid. Please choose a legal move according to chess rules.\n"
-            user_message += (
-                "Legal moves from this position are: "
-                + ", ".join([board.san(move) for move in board.legal_moves])
-                + "\n"
-            )
-
-        user_message += "\nProvide your next move as BLACK:"
+            user_message += f"Your last move '{invalid_move}' was invalid. Choose a legal move from this list:\n"
+            user_message += ", ".join([board.san(move) for move in board.legal_moves])
+            user_message += "\n\nRespond with only one of these exact moves.\n"
+        else:
+            # Add a reminder to only output the move
+            user_message += "\nRespond with ONLY the best move for BLACK using standard chess notation (like 'e5' or 'Nf6'). No other words."
 
         return system_message, user_message
 
@@ -205,14 +220,34 @@ class GroqEngine:
 
     def _clean_move(self, raw_move):
         """Clean the move text from the LLM response."""
-        # Remove common prefixes/suffixes
-        prefixes = ["I play", "My move is", "Move:", "I choose", "BLACK plays"]
+        # More aggressive cleaning to handle various formats
+        clean_move = raw_move.lower()
+
+        # Remove common prefixes/suffixes and phrases
+        prefixes = [
+            "i play",
+            "my move is",
+            "move:",
+            "i choose",
+            "black plays",
+            "i'll play",
+            "i will play",
+            "best move is",
+            "okay",
+            "alright",
+            "sure",
+            "the move",
+            "i recommend",
+        ]
+
         for prefix in prefixes:
-            if raw_move.startswith(prefix):
-                raw_move = raw_move[len(prefix) :].strip()
+            if clean_move.startswith(prefix):
+                clean_move = clean_move[len(prefix) :].strip()
 
-        # Remove punctuation and extra text
-        raw_move = raw_move.split(".")[0] if "." in raw_move else raw_move
-        raw_move = raw_move.split(",")[0] if "," in raw_move else raw_move
+        # Remove any non-move text, punctuation, and extra spaces
+        clean_move = clean_move.split(".")[0] if "." in clean_move else clean_move
+        clean_move = clean_move.split(",")[0] if "," in clean_move else clean_move
+        clean_move = clean_move.split(":")[0] if ":" in clean_move else clean_move
+        clean_move = clean_move.split(" ")[0] if " " in clean_move else clean_move
 
-        return raw_move.strip()
+        return clean_move.strip()
