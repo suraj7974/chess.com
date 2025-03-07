@@ -247,7 +247,7 @@ const ChessGame = ({ gameMode, onRestartGame }: ChessGameProps) => {
     if (isPlayerTurn) {
       return "Your turn";
     } else {
-      return gameMode === "stockfish" ? "Stockfish thinking..." : "Mistral AI thinking...";
+      return gameMode === "stockfish" ? "Stockfish is thinking..." : "AI is thinking...";
     }
   };
 
