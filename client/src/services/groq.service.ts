@@ -127,9 +127,29 @@ export const getGroqMove = async (fen: string, previousMoves: string[] = [], mod
       }),
     });
 
+    // Check if response is successful
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      // Check content type to handle different response formats
+      const contentType = response.headers.get("content-type");
+      
+      if (contentType && contentType.includes("application/json")) {
+        // Handle JSON error response
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      } else {
+        // Handle non-JSON error response (like HTML error pages)
+        const textError = await response.text();
+        console.error("Received non-JSON error response:", textError);
+        throw new Error(`Server error (${response.status}): Non-JSON response received`);
+      }
+    }
+
+    // Check content type before parsing JSON
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const textResponse = await response.text();
+      console.error("Unexpected non-JSON response:", textResponse);
+      throw new Error("Server returned non-JSON response");
     }
 
     const data = await response.json();

@@ -83,49 +83,77 @@ def health_check():
 @groq_routes.route("/move", methods=["POST"])
 def get_move():
     try:
-        data = request.json
-        if not data or "fen" not in data:
+        # Log request received
+        logging.info("Received move request")
+        
+        # Validate request data
+        if not request.is_json:
+            logging.error("Request is not JSON format")
+            return jsonify({"error": "Request must be JSON format"}), 400
+            
+        data = request.get_json(silent=True)
+        if not data:
+            logging.error("Failed to parse JSON from request")
+            return jsonify({"error": "Invalid JSON in request"}), 400
+            
+        if "fen" not in data:
+            logging.error("Missing FEN position in request")
             return jsonify({"error": "Missing FEN position"}), 400
 
         # Get model key if provided
         model_key = data.get("model", DEFAULT_MODEL)
+        logging.info(f"Using model: {model_key}")
 
         # Get or initialize engine with the selected model
         engine = get_engine(model_key)
         if not engine:
+            logging.error("Groq engine not available")
             return jsonify({"error": "Groq engine not available"}), 503
 
         fen = data["fen"]
         previous_moves = data.get("previousMoves", [])
+        logging.info(f"Processing move for position: {fen}")
 
         # Validate FEN
         try:
             chess.Board(fen)
-        except ValueError:
+        except ValueError as e:
+            logging.error(f"Invalid FEN format: {str(e)}")
             return jsonify({"error": "Invalid FEN format"}), 400
 
-        # Get the move from the Groq engine
-        move = engine.get_move(fen, previous_moves)
+        try:
+            # Get the move from the Groq engine with timeout handling
+            move = engine.get_move(fen, previous_moves)
+            logging.info(f"Engine returned move: {move}")
+            
+            # Double-check that the move is valid
+            if not _is_valid_uci_move(move, fen):
+                logging.warning(f"Invalid move returned by engine: {move}")
+                # Get a random valid move as fallback
+                board = chess.Board(fen)
+                if list(board.legal_moves):
+                    move = list(board.legal_moves)[0].uci()
+                    logging.info(f"Using fallback random move: {move}")
+                else:
+                    logging.error("No legal moves available")
+                    return jsonify({"error": "No legal moves available in position"}), 400
 
-        # Double-check that the move is valid
-        if not _is_valid_uci_move(move, fen):
-            logging.warning(f"Invalid move returned by engine: {move}")
-            # Get a random valid move as fallback
-            board = chess.Board(fen)
-            if list(board.legal_moves):
-                move = list(board.legal_moves)[0].uci()
-                logging.info(f"Using fallback random move: {move}")
-
-        return jsonify(
-            {
+            # Return successful response
+            return jsonify({
                 "move": move,
                 "model": engine.model_key,
                 "modelName": engine.model_config["name"],
-            }
-        )
+            })
+        except Exception as e:
+            logging.error(f"Error getting move from engine: {str(e)}")
+            traceback.print_exc()
+            return jsonify({"error": f"Engine error: {str(e)}"}), 500
+            
     except Exception as e:
-        logging.error(f"Move calculation failed: {e}")
-        return jsonify({"error": str(e)}), 500
+        # Catch-all for any unexpected errors
+        logging.error(f"Unexpected error in move endpoint: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 def _is_valid_uci_move(move_str, fen):
