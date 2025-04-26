@@ -25,10 +25,27 @@ export const checkGroqHealth = async (): Promise<boolean> => {
 
     const response = await fetch(healthUrl, {
       signal: controller.signal,
+      // Add explicit mode and credentials to help with CORS
+      mode: "cors",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Origin": window.location.origin,
+      }
     }).finally(() => clearTimeout(timeoutId));
 
     if (!response.ok) {
       console.error("Health check failed with status:", response.status);
+      console.error("Response headers:", [...response.headers.entries()]);
+      
+      // If we got a 404, the endpoint might not be deployed yet
+      if (response.status === 404) {
+        console.warn("Health endpoint not found (404). This may be temporary during deployment.");
+        // Return true anyway to allow the game to proceed with fallback modes
+        return true;
+      }
+      
       return false;
     }
 
@@ -46,6 +63,14 @@ export const checkGroqHealth = async (): Promise<boolean> => {
     return false;
   } catch (error) {
     console.error("Groq API health check failed:", error);
+    
+    // Special handling for CORS and network errors
+    if (error instanceof TypeError || String(error).includes('CORS') || String(error).includes('network')) {
+      console.warn("Health check failed with possible CORS or network issue. Continuing with fallback mode.");
+      // Return true to allow the game to proceed with fallbacks
+      return true;
+    }
+    
     return false;
   }
 };
@@ -56,7 +81,16 @@ export const getGroqModels = async (): Promise<{ models: GroqModel[]; default: s
     const url = `${API_URL}/models`;
     console.log("Models URL:", url);
 
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      // Add explicit mode and credentials to help with CORS
+      mode: "cors",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Origin": window.location.origin,
+      }
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -117,8 +151,12 @@ export const getGroqMove = async (fen: string, previousMoves: string[] = [], mod
 
     const response = await fetch(`${API_URL}/move`, {
       method: "POST",
+      mode: "cors",
+      credentials: "include",
       headers: {
+        "Accept": "application/json",
         "Content-Type": "application/json",
+        "Origin": window.location.origin,
       },
       body: JSON.stringify({
         fen,
@@ -129,6 +167,9 @@ export const getGroqMove = async (fen: string, previousMoves: string[] = [], mod
 
     // Check if response is successful
     if (!response.ok) {
+      console.error("Move request failed with status:", response.status);
+      console.error("Response headers:", [...response.headers.entries()]);
+      
       // Check content type to handle different response formats
       const contentType = response.headers.get("content-type");
 
@@ -162,6 +203,11 @@ export const getGroqMove = async (fen: string, previousMoves: string[] = [], mod
     return data.move;
   } catch (error) {
     console.error("Error getting Groq move:", error);
+    // If the error looks like a CORS error, add more diagnostic information
+    if (String(error).includes('CORS')) {
+      console.error("Possible CORS issue detected. Browser origin:", window.location.origin);
+      console.error("API URL being accessed:", `${API_URL}/move`);
+    }
     throw error;
   }
 };

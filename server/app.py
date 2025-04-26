@@ -23,32 +23,32 @@ def create_app():
         logging.debug("Body: %s", request.get_data())
         logging.debug("URL: %s", request.url)
 
-    # Configure CORS for production
+    # Configure CORS - simplify to just one configuration method
     CORS(
         app,
-        resources={
-            r"/*": {
-                "origins": "*",  # Temporarily allow all origins for testing
-                "methods": ["GET", "POST", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization", "Origin", "Accept"],
-                "expose_headers": ["Content-Type"],
-                "supports_credentials": True,
-                "send_wildcard": False,
-            }
-        },
+        origins=Config.CORS_ORIGINS,  # Use the specific origins from config
+        supports_credentials=True,
+        methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "Origin", "Accept"],
     )
 
-    # Add CORS headers to all responses
+    # Add CORS headers to all responses - ensure proper handling for preflight requests
     @app.after_request
     def after_request(response):
-        origin = request.headers.get("Origin")
-        if origin in Config.CORS_ORIGINS:
+        # Get origin from request
+        origin = request.headers.get("Origin", "")
+        
+        # If origin is in our allowed list, or if we're in development and want to allow any origin
+        if origin in Config.CORS_ORIGINS or (Config.DEBUG and origin):
             response.headers.add("Access-Control-Allow-Origin", origin)
-            response.headers.add(
-                "Access-Control-Allow-Headers", "Content-Type,Authorization"
-            )
-            response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+            response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, Accept")
+            response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             response.headers.add("Access-Control-Allow-Credentials", "true")
+            
+        # Handle preflight OPTIONS requests
+        if request.method == "OPTIONS":
+            return response
+            
         return response
 
     # Configure logging
@@ -80,25 +80,26 @@ def create_app():
 
     @app.errorhandler(404)
     def not_found(error):
-        return jsonify({"error": "Not found"}), 404
+        # Ensure CORS headers are set even in error responses
+        response = jsonify({"error": "Not found"})
+        return response, 404
 
     @app.errorhandler(500)
     def internal_error(error):
-        return jsonify({"error": "Internal server error"}), 500
+        # Ensure CORS headers are set even in error responses
+        response = jsonify({"error": "Internal server error"})
+        return response, 500
 
     @app.errorhandler(Exception)
     def handle_exception(e):
         logging.error(f"Unhandled exception: {str(e)}")
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Internal server error",
-                    "details": str(e),
-                }
-            ),
-            500,
-        )
+        # Ensure CORS headers are set even in exception responses
+        response = jsonify({
+            "status": "error",
+            "message": "Internal server error",
+            "details": str(e),
+        })
+        return response, 500
 
     @app.route("/")
     def home():
