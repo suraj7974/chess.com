@@ -1,15 +1,28 @@
 import os
 import logging
 import subprocess
+import random
+import chess
 from config.config import Config
 
 class StockfishEngine:
     def __init__(self):
-        self.stockfish_path = self._find_stockfish()
-        if not self.stockfish_path:
-            raise FileNotFoundError("Stockfish not found in any known location")
+        self.is_serverless = self._check_serverless_env()
+        self.stockfish_path = None
         
-        self._initialize_engine()
+        if not self.is_serverless:
+            self.stockfish_path = self._find_stockfish()
+            if self.stockfish_path:
+                self._initialize_engine()
+            else:
+                logging.warning("Stockfish binary not found. Using fallback mode.")
+                self.is_serverless = True  # Force fallback mode
+        else:
+            logging.info("Running in serverless environment. Using fallback chess logic.")
+
+    def _check_serverless_env(self):
+        # Check if we're running in a serverless environment (like Vercel)
+        return os.environ.get('VERCEL') == '1' or os.environ.get('AWS_LAMBDA_FUNCTION_NAME') is not None
 
     def _find_stockfish(self):
         for path in Config.STOCKFISH_PATHS:
@@ -33,6 +46,7 @@ class StockfishEngine:
             self._setup_engine()
         except Exception as e:
             logging.error(f"Failed to initialize engine: {str(e)}")
+            self.is_serverless = True  # Fall back to serverless mode
             raise
 
     def _setup_engine(self):
@@ -63,8 +77,40 @@ class StockfishEngine:
             if target in line:
                 return line
 
+    def _get_fallback_move(self, fen):
+        """Generate a valid chess move without using the Stockfish engine"""
+        try:
+            board = chess.Board(fen)
+            legal_moves = list(board.legal_moves)
+            if legal_moves:
+                # Pick a reasonable move using basic heuristics
+                captures = [move for move in legal_moves if board.is_capture(move)]
+                checks = [move for move in legal_moves if board.gives_check(move)]
+                
+                # Prefer captures and checks, otherwise random move
+                if captures:
+                    selected_move = random.choice(captures)
+                elif checks:
+                    selected_move = random.choice(checks)
+                else:
+                    selected_move = random.choice(legal_moves)
+                
+                return selected_move.uci()
+            return None
+        except Exception as e:
+            logging.error(f"Error in fallback move generation: {e}")
+            return None
+
     def get_best_move(self, fen, skill_level=20):
         logging.info(f"Getting move for position: {fen}")
+        
+        # Use fallback mode in serverless environment
+        if self.is_serverless:
+            move = self._get_fallback_move(fen)
+            logging.info(f"Fallback mode best move: {move}")
+            return move
+            
+        # Traditional Stockfish mode for local environment
         try:
             self.send_command(f"setoption name Skill Level value {skill_level}")
             self.send_command("ucinewgame")
@@ -76,11 +122,12 @@ class StockfishEngine:
             logging.info(f"Best move found: {move}")
             return move
         except Exception as e:
-            logging.error(f"Error getting move: {str(e)}")
-            raise
+            logging.error(f"Error getting move, trying fallback: {str(e)}")
+            # Fall back to simple move generation if the engine fails
+            return self._get_fallback_move(fen)
 
     def __del__(self):
-        if hasattr(self, 'stockfish'):
+        if not self.is_serverless and hasattr(self, 'stockfish'):
             try:
                 self.stockfish.terminate()
                 self.stockfish.wait(timeout=1)
