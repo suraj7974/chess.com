@@ -131,7 +131,7 @@ export const getGroqMove = async (fen: string, previousMoves: string[] = [], mod
     if (!response.ok) {
       // Check content type to handle different response formats
       const contentType = response.headers.get("content-type");
-      
+
       if (contentType && contentType.includes("application/json")) {
         // Handle JSON error response
         const errorData = await response.json();

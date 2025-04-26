@@ -5,9 +5,12 @@ import traceback
 import sys
 import random
 import time
+import threading
 from config.config import Config
 from config.models import get_model_by_key, DEFAULT_MODEL
 
+# Global cache for moves across engine instances
+GLOBAL_MOVE_CACHE = {}
 
 class MockGroqEngine:
     """Mock engine for fallback in production when Groq is unavailable"""
@@ -17,7 +20,6 @@ class MockGroqEngine:
         self.model_config = get_model_by_key(DEFAULT_MODEL)
         self.model_id = self.model_config["id"]
         self.move_history = []
-        self.move_cache = {}  # Cache for previously generated moves
         logging.info("Initialized MockGroqEngine as fallback")
 
     def get_move(self, fen, previous_moves=None, invalid_move=None):
@@ -25,9 +27,9 @@ class MockGroqEngine:
         try:
             # Check cache first
             cache_key = f"{fen}_{self.model_key}"
-            if cache_key in self.move_cache:
+            if cache_key in GLOBAL_MOVE_CACHE:
                 logging.info(f"Using cached move for position: {fen}")
-                return self.move_cache[cache_key]
+                return GLOBAL_MOVE_CACHE[cache_key]
                 
             # Generate a better move using basic heuristics
             board = chess.Board(fen)
@@ -46,7 +48,7 @@ class MockGroqEngine:
                     
                 move_uci = selected_move.uci()
                 # Store in cache
-                self.move_cache[cache_key] = move_uci
+                GLOBAL_MOVE_CACHE[cache_key] = move_uci
                 return move_uci
             return "e2e4"  # Default fallback move
         except Exception as e:
@@ -62,6 +64,8 @@ class MockGroqEngine:
 
 
 class GroqEngine:
+    MAX_RESPONSE_TIME = 8  # Maximum seconds to wait for Groq API response before using fallback
+
     def __init__(self, model_key=None):
         try:
             # Print debug information
@@ -75,8 +79,8 @@ class GroqEngine:
             logging.info(f"API key exists: {bool(api_key)}")
 
             # Check if we're running on Vercel
-            is_vercel = os.getenv("VERCEL") == "1"
-            logging.info(f"Running on Vercel: {is_vercel}")
+            self.is_vercel = os.getenv("VERCEL") == "1"
+            logging.info(f"Running on Vercel: {self.is_vercel}")
 
             # Get model configuration
             self.model_key = model_key if model_key else DEFAULT_MODEL
@@ -100,16 +104,13 @@ class GroqEngine:
             self.client = Groq(api_key=api_key)
             self.move_history = []
             
-            # Cache for storing computed moves to avoid repeat API calls
-            self.move_cache = {}
-            
             # Rate limiting variables
             self.last_api_call = 0
-            self.min_call_interval = 1.0  # seconds between API calls to avoid rate limiting
-            self.backoff_time = 2.0  # initial backoff time in seconds
-            self.max_backoff = 30.0  # maximum backoff time
+            self.min_call_interval = 0.5  # reduced to speed up responses
+            self.backoff_time = 1.0  # reduced initial backoff time
+            self.max_backoff = 2.0  # reduced maximum backoff
             self.consecutive_errors = 0
-            self.max_retries = 3
+            self.max_retries = 1  # reduce retries to speed up fallback
 
             logging.info(f"Groq engine initialized successfully with model {self.model_id}")
             
@@ -143,36 +144,13 @@ class GroqEngine:
         board = chess.Board(fen)
         formatted_board = self._format_board(board)
 
-        # Improved system message with clearer instructions
-        system_message = """
-        You are a chess grandmaster AI analyzing chess positions. Your task is to calculate the best move for the current player in the given position.
-        
-        IMPORTANT: You must ONLY respond with a single chess move in standard algebraic notation (e.g., "e5", "Nf6", "Bxc6", "O-O").
-        Do not include any explanation, discussion, or additional text whatsoever.
-        Do not say words like "okay", "alright", "I'll play", etc.
-        Just provide the move notation and nothing else.
-        """
+        # Simplified system message to reduce token count
+        system_message = """You are a chess AI. Calculate the best move for the current player. Respond ONLY with a single chess move in standard algebraic notation (e.g., "e5", "Nf6"). No explanation."""
 
         # Determine whose turn it is
         current_player = "WHITE" if board.turn == chess.WHITE else "BLACK"
         
-        user_message = f"Here is the current chess position (you are playing as {current_player}):\n\n{formatted_board}\n\n"
-
-        # Add move history
-        if move_history and len(move_history) > 0:
-            history_text = "Previous moves in this game:\n"
-            for i, move in enumerate(move_history):
-                history_text += f"{i+1}. {move}\n"
-            user_message += f"{history_text}\n"
-
-        # Add invalid move feedback with explicit instructions
-        if invalid_move:
-            user_message += f"Your last move '{invalid_move}' was invalid. Choose a legal move from this list:\n"
-            user_message += ", ".join([board.san(move) for move in board.legal_moves])
-            user_message += "\n\nRespond with only one of these exact moves.\n"
-        else:
-            # Add a reminder to only output the move
-            user_message += f"\nRespond with ONLY the best move for {current_player} using standard chess notation (like 'e5' or 'Nf6'). No other words."
+        user_message = f"Board position (you are {current_player}):\n\n{formatted_board}\n\nRespond with ONLY the best move."
 
         return system_message, user_message
 
@@ -196,15 +174,51 @@ class GroqEngine:
         except Exception as e:
             logging.error(f"Error in fallback move generation: {e}")
             return None
+    
+    def _call_groq_api(self, system_message, user_message, result_dict):
+        """Call the Groq API in a separate thread with timeout handling"""
+        try:
+            # Get temperature from model config
+            temperature = self.model_config.get("temperature", 0.2)
+
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_message},
+                ],
+                max_tokens=10,
+                temperature=temperature,
+            )
+
+            raw_move = response.choices[0].message.content.strip()
+            logging.info(f"Raw move from Groq: {raw_move}")
+            
+            # Store result in the shared dictionary
+            result_dict["move"] = raw_move
+            result_dict["success"] = True
+        except Exception as e:
+            logging.error(f"Error in API call thread: {str(e)}")
+            result_dict["error"] = str(e)
+            result_dict["success"] = False
 
     def get_move(self, fen, previous_moves=None, invalid_move=None):
-        """Get a move from the Groq API with caching and retry logic"""
+        """Get a move from the Groq API with caching and timeout handling"""
         # Check cache first to avoid unnecessary API calls
         cache_key = f"{fen}_{self.model_key}"
-        if cache_key in self.move_cache:
+        if cache_key in GLOBAL_MOVE_CACHE:
             logging.info(f"Using cached move for position: {fen}")
-            return self.move_cache[cache_key]
+            return GLOBAL_MOVE_CACHE[cache_key]
             
+        # If running on Vercel with limited execution time, use optimized mode
+        if self.is_vercel:
+            logging.info("Using optimized mode for Vercel environment")
+            # Vercel has limited execution time, so return fallback move quickly
+            fallback_move = self._get_fallback_move(fen)
+            if fallback_move:
+                GLOBAL_MOVE_CACHE[cache_key] = fallback_move
+                return fallback_move
+        
         # Create prompt
         system_message, user_message = self._create_prompt(
             fen, previous_moves, invalid_move
@@ -219,102 +233,64 @@ class GroqEngine:
             logging.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
             time.sleep(sleep_time)
         
-        # Retry logic for API calls
-        retries = 0
-        while retries <= self.max_retries:
-            try:
-                if retries > 0:
-                    backoff = min(self.backoff_time * (2 ** (retries - 1)), self.max_backoff)
-                    logging.info(f"Retry {retries}/{self.max_retries}: waiting {backoff:.2f} seconds")
-                    time.sleep(backoff)
-                
-                logging.info(f"Sending request to Groq API (attempt {retries+1}/{self.max_retries+1})")
-                self.last_api_call = time.time()
-
-                # Get temperature from model config
-                temperature = self.model_config.get("temperature", 0.2)
-
-                response = self.client.chat.completions.create(
-                    model=self.model_id,
-                    messages=[
-                        {"role": "system", "content": system_message},
-                        {"role": "user", "content": user_message},
-                    ],
-                    max_tokens=10,
-                    temperature=temperature,
-                )
-
-                raw_move = response.choices[0].message.content.strip()
-                logging.info(f"Raw move from Groq: {raw_move}")
-
-                # Reset consecutive errors counter on success
-                self.consecutive_errors = 0
-
-                # Clean and validate move
-                clean_move = self._clean_move(raw_move)
-                logging.info(f"Cleaned move: {clean_move}")
-
-                # Validate the move
-                board = chess.Board(fen)
-                try:
-                    # Convert algebraic notation to a move
-                    chess_move = board.parse_san(clean_move)
-                    # Check if the move is legal
-                    if chess_move in board.legal_moves:
-                        # Record the move in history
-                        if previous_moves is not None:
-                            self.move_history = previous_moves.copy()
-                        self.move_history.append(clean_move)
-
-                        # Convert to UCI format and cache it
-                        move_uci = chess_move.uci()
-                        self.move_cache[cache_key] = move_uci
-                        return move_uci
-                    else:
-                        # If this is the last retry, use a fallback move
-                        if retries == self.max_retries:
-                            fallback = self._get_fallback_move(fen)
-                            if fallback:
-                                self.move_cache[cache_key] = fallback
-                                return fallback
-                        
-                        # Otherwise try again with feedback
-                        retries += 1
-                        continue
-                except ValueError:
-                    # If this is the last retry, use a fallback move
-                    if retries == self.max_retries:
-                        fallback = self._get_fallback_move(fen)
-                        if fallback:
-                            self.move_cache[cache_key] = fallback
-                            return fallback
-                    
-                    # Otherwise try again with feedback
-                    retries += 1
-                    continue
-
-            except Exception as e:
-                logging.error(f"Error getting move from Groq API (attempt {retries+1}): {str(e)}")
-                self.consecutive_errors += 1
-                
-                # If this is the last retry, use a fallback move
-                if retries == self.max_retries:
-                    fallback = self._get_fallback_move(fen)
-                    if fallback:
-                        # Cache the fallback move to avoid repeated failures
-                        self.move_cache[cache_key] = fallback
-                        return fallback
-                    raise  # Re-raise the exception if we can't even get a fallback
-                
-                retries += 1
+        self.last_api_call = time.time()
         
-        # If we've exhausted retries and still don't have a move, try one more fallback
-        fallback = self._get_fallback_move(fen)
-        if fallback:
-            self.move_cache[cache_key] = fallback
-            return fallback
+        # Use threading with timeout to avoid hanging
+        result_dict = {"success": False, "move": None, "error": None}
+        api_thread = threading.Thread(
+            target=self._call_groq_api,
+            args=(system_message, user_message, result_dict)
+        )
+        api_thread.daemon = True
+        api_thread.start()
+        
+        # Wait for thread to complete or timeout
+        api_thread.join(timeout=self.MAX_RESPONSE_TIME)
+        
+        # Check if we got a result within the timeout period
+        if api_thread.is_alive() or not result_dict["success"]:
+            logging.warning(f"API call timed out or failed after {self.MAX_RESPONSE_TIME}s. Using fallback.")
+            # Thread is still running or failed, use fallback move
+            fallback_move = self._get_fallback_move(fen)
+            if fallback_move:
+                GLOBAL_MOVE_CACHE[cache_key] = fallback_move
+                return fallback_move
+            raise Exception(f"Failed to get move: {result_dict.get('error', 'Timeout')}")
+        
+        # Process the successful API response
+        raw_move = result_dict["move"]
+        
+        # Clean and validate move
+        clean_move = self._clean_move(raw_move)
+        logging.info(f"Cleaned move: {clean_move}")
+
+        # Validate the move
+        board = chess.Board(fen)
+        try:
+            # Convert algebraic notation to a move
+            chess_move = board.parse_san(clean_move)
+            # Check if the move is legal
+            if chess_move in board.legal_moves:
+                # Record the move in history
+                if previous_moves is not None:
+                    self.move_history = previous_moves.copy()
+                self.move_history.append(clean_move)
+
+                # Convert to UCI format and cache it
+                move_uci = chess_move.uci()
+                GLOBAL_MOVE_CACHE[cache_key] = move_uci
+                return move_uci
+        except Exception:
+            pass
             
-        raise Exception("Failed to get a valid move after multiple attempts")
+        # If we get here, the move wasn't valid
+        logging.warning("API returned an invalid move, using fallback")
+        fallback_move = self._get_fallback_move(fen)
+        if fallback_move:
+            GLOBAL_MOVE_CACHE[cache_key] = fallback_move
+            return fallback_move
+            
+        raise Exception("Failed to get a valid move")
 
     def _clean_move(self, raw_move):
         """Clean the move text from the LLM response."""
