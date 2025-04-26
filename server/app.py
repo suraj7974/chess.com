@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config.config import Config
 from routes.stockfish_routes import stockfish_routes
 from routes.game_routes import game_routes
-from routes.groq_routes import groq_routes  # Make sure this is imported
+from routes.groq_routes import groq_routes
 
 
 def create_app():
@@ -23,32 +23,27 @@ def create_app():
         logging.debug("Body: %s", request.get_data())
         logging.debug("URL: %s", request.url)
 
-    # Configure CORS for production
+    # Configure CORS - use a simple wildcard approach for Vercel deployment
     CORS(
         app,
-        resources={
-            r"/*": {
-                "origins": "*",  # Temporarily allow all origins for testing
-                "methods": ["GET", "POST", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization", "Origin", "Accept"],
-                "expose_headers": ["Content-Type"],
-                "supports_credentials": True,
-                "send_wildcard": False,
-            }
-        },
+        resources={r"/*": {"origins": "*"}},
+        supports_credentials=True,
+        methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "Origin", "Accept"]
     )
 
-    # Add CORS headers to all responses
+    # Add CORS headers to all responses - especially needed for error responses
     @app.after_request
     def after_request(response):
-        origin = request.headers.get("Origin")
-        if origin in Config.CORS_ORIGINS:
-            response.headers.add("Access-Control-Allow-Origin", origin)
-            response.headers.add(
-                "Access-Control-Allow-Headers", "Content-Type,Authorization"
-            )
-            response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-            response.headers.add("Access-Control-Allow-Credentials", "true")
+        # Add CORS headers to every response
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, Accept")
+        response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        
+        # Handle preflight OPTIONS requests specially
+        if request.method == "OPTIONS":
+            return response
+            
         return response
 
     # Configure logging
@@ -80,25 +75,26 @@ def create_app():
 
     @app.errorhandler(404)
     def not_found(error):
-        return jsonify({"error": "Not found"}), 404
+        # Ensure CORS headers are set even in error responses
+        response = jsonify({"error": "Not found"})
+        return response, 404
 
     @app.errorhandler(500)
     def internal_error(error):
-        return jsonify({"error": "Internal server error"}), 500
+        # Ensure CORS headers are set even in error responses
+        response = jsonify({"error": "Internal server error"})
+        return response, 500
 
     @app.errorhandler(Exception)
     def handle_exception(e):
         logging.error(f"Unhandled exception: {str(e)}")
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Internal server error",
-                    "details": str(e),
-                }
-            ),
-            500,
-        )
+        # Ensure CORS headers are set even in exception responses
+        response = jsonify({
+            "status": "error",
+            "message": "Internal server error",
+            "details": str(e),
+        })
+        return response, 500
 
     @app.route("/")
     def home():
