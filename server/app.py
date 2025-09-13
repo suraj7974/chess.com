@@ -5,12 +5,19 @@ import os
 import sys
 
 # Add the current directory to the path to ensure imports work
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
 
-from config.config import Config
-from routes.stockfish_routes import stockfish_routes
-from routes.game_routes import game_routes
-from routes.groq_routes import groq_routes
+try:
+    from config.config import Config
+    from routes.stockfish_routes import stockfish_routes
+    from routes.game_routes import game_routes
+    from routes.groq_routes import groq_routes
+except ImportError as e:
+    print(f"Import error: {e}")
+    print(f"Current directory: {current_dir}")
+    print(f"Python path: {sys.path}")
+    raise
 
 
 def create_app():
@@ -23,22 +30,29 @@ def create_app():
         logging.debug("Body: %s", request.get_data())
         logging.debug("URL: %s", request.url)
 
-    # Configure CORS - use a simple wildcard approach for Vercel deployment
+    # Configure CORS - use configured origins
     CORS(
         app,
-        resources={r"/*": {"origins": "*"}},
+        origins=Config.CORS_ORIGINS,
         supports_credentials=True,
         methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "Origin", "Accept"]
+        allow_headers=["Content-Type", "Authorization", "Origin", "Accept", "X-Requested-With"]
     )
 
-    # Add CORS headers to all responses - especially needed for error responses
+    # Add CORS headers to all responses
     @app.after_request
     def after_request(response):
-        # Add CORS headers to every response
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, Accept")
+        origin = request.headers.get('Origin')
+        
+        # Check if origin is in allowed list or if we're allowing all
+        if "*" in Config.CORS_ORIGINS or origin in Config.CORS_ORIGINS:
+            response.headers.add("Access-Control-Allow-Origin", origin or "*")
+        else:
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, Accept, X-Requested-With")
         response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
         
         # Handle preflight OPTIONS requests specially
         if request.method == "OPTIONS":
@@ -116,7 +130,11 @@ def create_app():
 
 app = create_app()
 
-# Add this outside the function to help with debugging
+# WSGI handler for Vercel
+def handler(request, context):
+    return app
+
+# For local development
 if __name__ == "__main__":
     print(f"Python version: {sys.version}")
     print(f"Running in directory: {os.getcwd()}")
