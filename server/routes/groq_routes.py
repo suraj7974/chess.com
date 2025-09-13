@@ -3,6 +3,7 @@ import logging
 import os
 import traceback
 import chess
+import random
 from engine.groq_engine import GroqEngine, MockGroqEngine, GLOBAL_MOVE_CACHE
 from config.config import Config
 from config.models import get_model_list, get_model_by_key, DEFAULT_MODEL

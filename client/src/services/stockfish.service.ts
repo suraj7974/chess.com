@@ -102,10 +102,9 @@ export const checkStockfishHealth = async (): Promise<boolean> => {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Origin: window.location.origin,
       },
       mode: "cors", // Explicitly set CORS mode
-      credentials: "include",
+      credentials: "omit", // Don't send credentials to work with CORS *
     });
 
     if (!response.ok) {
@@ -145,10 +144,9 @@ export const getStockfishMove = async (fen: string, skillLevel: number = 20): Pr
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          Origin: window.location.origin,
         },
         mode: "cors",
-        credentials: "include",
+        credentials: "omit", // Don't send credentials to work with CORS *
         body: JSON.stringify({ fen, skillLevel }),
       });
 

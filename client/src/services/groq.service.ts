@@ -93,11 +93,10 @@ export const checkGroqHealth = async (): Promise<boolean> => {
       signal: controller.signal,
       // Add explicit mode and credentials to help with CORS
       mode: "cors",
-      credentials: "include",
+      credentials: "omit", // Don't send credentials to work with CORS *
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Origin: window.location.origin,
       },
     }).finally(() => clearTimeout(timeoutId));
 
@@ -150,11 +149,10 @@ export const getGroqModels = async (): Promise<{ models: GroqModel[]; default: s
     const response = await fetch(url, {
       // Add explicit mode and credentials to help with CORS
       mode: "cors",
-      credentials: "include",
+      credentials: "omit", // Don't send credentials to work with CORS *
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Origin: window.location.origin,
       },
     });
 
@@ -219,11 +217,10 @@ export const getGroqMove = async (fen: string, previousMoves: string[] = [], mod
       const response = await fetch(`${API_URL}/move`, {
         method: "POST",
         mode: "cors",
-        credentials: "include",
+        credentials: "omit", // Don't send credentials to work with CORS *
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          Origin: window.location.origin,
         },
         body: JSON.stringify({
           fen,
