@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from engine.stockfish import StockfishEngine
+from ..engine.stockfish import StockfishEngine
 import logging
 
 stockfish_routes = Blueprint("stockfish", __name__)

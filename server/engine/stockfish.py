@@ -3,7 +3,7 @@ import logging
 import subprocess
 
 import chess
-from config.config import Config
+from ..config.config import Config
 
 class StockfishEngine:
     def __init__(self):

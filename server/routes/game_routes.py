@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 import logging
-from services.chess_engine import ChessEngine
-from services.llm_integration import get_llm_move
+from ..services.chess_engine import ChessEngine
+from ..services.llm_integration import get_llm_move
 
 game_routes = Blueprint("game", __name__)
 chess_engines = {"default": ChessEngine()}

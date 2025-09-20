@@ -6,8 +6,8 @@ import sys
 import random
 import time
 import threading
-from config.config import Config
-from config.models import get_model_by_key, DEFAULT_MODEL
+from ..config.config import Config
+from ..config.models import get_model_list, get_model_by_key, DEFAULT_MODEL
 
 # Global cache for moves across engine instances
 GLOBAL_MOVE_CACHE = {}
@@ -30,7 +30,7 @@ class MockGroqEngine:
             if cache_key in GLOBAL_MOVE_CACHE:
                 logging.info(f"Using cached move for position: {fen}")
                 return GLOBAL_MOVE_CACHE[cache_key]
-                
+
             # Generate a better move using basic heuristics
             board = chess.Board(fen)
             moves = list(board.legal_moves)
@@ -38,14 +38,14 @@ class MockGroqEngine:
                 # Prioritize captures and checks
                 captures = [move for move in moves if board.is_capture(move)]
                 checks = [move for move in moves if board.gives_check(move)]
-                
+
                 if captures:
                     selected_move = random.choice(captures)
                 elif checks:
                     selected_move = random.choice(checks)
                 else:
                     selected_move = random.choice(moves)
-                    
+
                 move_uci = selected_move.uci()
                 # Store in cache
                 GLOBAL_MOVE_CACHE[cache_key] = move_uci
@@ -75,7 +75,7 @@ class GroqEngine:
             api_key = os.getenv("GROQ_API_KEY")
             if not api_key and hasattr(Config, "GROQ_API_KEY"):
                 api_key = Config.GROQ_API_KEY
-                
+
             logging.info(f"API key exists: {bool(api_key)}")
 
             # Check if we're running on Vercel
@@ -103,7 +103,7 @@ class GroqEngine:
             logging.info("Creating Groq client...")
             self.client = Groq(api_key=api_key)
             self.move_history = []
-            
+
             # Rate limiting variables
             self.last_api_call = 0
             self.min_call_interval = 0.5  # reduced to speed up responses
@@ -113,7 +113,7 @@ class GroqEngine:
             self.max_retries = 1  # reduce retries to speed up fallback
 
             logging.info(f"Groq engine initialized successfully with model {self.model_id}")
-            
+
             # Skip test connection to save on API tokens
             logging.info("Skipping test connection to preserve API quota")
 
@@ -149,7 +149,7 @@ class GroqEngine:
 
         # Determine whose turn it is
         current_player = "WHITE" if board.turn == chess.WHITE else "BLACK"
-        
+
         user_message = f"Board position (you are {current_player}):\n\n{formatted_board}\n\nRespond with ONLY the best move."
 
         return system_message, user_message
@@ -163,7 +163,7 @@ class GroqEngine:
                 # Try to make a reasonable move
                 captures = [move for move in moves if board.is_capture(move)]
                 checks = [move for move in moves if board.gives_check(move)]
-                
+
                 if captures:
                     return random.choice(captures).uci()
                 elif checks:
@@ -174,7 +174,7 @@ class GroqEngine:
         except Exception as e:
             logging.error(f"Error in fallback move generation: {e}")
             return None
-    
+
     def _call_groq_api(self, system_message, user_message, result_dict):
         """Call the Groq API in a separate thread with timeout handling"""
         try:
@@ -193,7 +193,7 @@ class GroqEngine:
 
             raw_move = response.choices[0].message.content.strip()
             logging.info(f"Raw move from Groq: {raw_move}")
-            
+
             # Store result in the shared dictionary
             result_dict["move"] = raw_move
             result_dict["success"] = True
@@ -209,7 +209,7 @@ class GroqEngine:
         if cache_key in GLOBAL_MOVE_CACHE:
             logging.info(f"Using cached move for position: {fen}")
             return GLOBAL_MOVE_CACHE[cache_key]
-            
+
         # If running on Vercel with limited execution time, use optimized mode
         if self.is_vercel:
             logging.info("Using optimized mode for Vercel environment")
@@ -218,7 +218,7 @@ class GroqEngine:
             if fallback_move:
                 GLOBAL_MOVE_CACHE[cache_key] = fallback_move
                 return fallback_move
-        
+
         # Create prompt
         system_message, user_message = self._create_prompt(
             fen, previous_moves, invalid_move
@@ -227,14 +227,14 @@ class GroqEngine:
         # Apply rate limiting
         current_time = time.time()
         time_since_last_call = current_time - self.last_api_call
-        
+
         if time_since_last_call < self.min_call_interval:
             sleep_time = self.min_call_interval - time_since_last_call
             logging.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
             time.sleep(sleep_time)
-        
+
         self.last_api_call = time.time()
-        
+
         # Use threading with timeout to avoid hanging
         result_dict = {"success": False, "move": None, "error": None}
         api_thread = threading.Thread(
@@ -243,10 +243,10 @@ class GroqEngine:
         )
         api_thread.daemon = True
         api_thread.start()
-        
+
         # Wait for thread to complete or timeout
         api_thread.join(timeout=self.MAX_RESPONSE_TIME)
-        
+
         # Check if we got a result within the timeout period
         if api_thread.is_alive() or not result_dict["success"]:
             logging.warning(f"API call timed out or failed after {self.MAX_RESPONSE_TIME}s. Using fallback.")
@@ -256,10 +256,10 @@ class GroqEngine:
                 GLOBAL_MOVE_CACHE[cache_key] = fallback_move
                 return fallback_move
             raise Exception(f"Failed to get move: {result_dict.get('error', 'Timeout')}")
-        
+
         # Process the successful API response
         raw_move = result_dict["move"]
-        
+
         # Clean and validate move
         clean_move = self._clean_move(raw_move)
         logging.info(f"Cleaned move: {clean_move}")
@@ -282,14 +282,14 @@ class GroqEngine:
                 return move_uci
         except Exception:
             pass
-            
+
         # If we get here, the move wasn't valid
         logging.warning("API returned an invalid move, using fallback")
         fallback_move = self._get_fallback_move(fen)
         if fallback_move:
             GLOBAL_MOVE_CACHE[cache_key] = fallback_move
             return fallback_move
-            
+
         raise Exception("Failed to get a valid move")
 
     def _clean_move(self, raw_move):
