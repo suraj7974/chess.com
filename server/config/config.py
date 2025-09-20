@@ -35,4 +35,4 @@ class Config:
     LOG_LEVEL = "INFO" if IS_VERCEL else ("DEBUG" if DEBUG else "INFO")
 
     # CORS settings - use environment variable if available
-        CORS_ORIGINS = "*"  # Allow all origins
+    CORS_ORIGINS = "*"  # Allow all origins
