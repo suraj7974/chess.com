@@ -39,6 +39,10 @@ def create_app():
     app.register_blueprint(game_routes, url_prefix="/api/game")
     app.register_blueprint(groq_routes, url_prefix="/api/groq")
 
+    @app.route("/favicon.ico")
+    def favicon():
+        return "", 204
+
     # Basic health check routes
     @app.route("/")
     def home():
