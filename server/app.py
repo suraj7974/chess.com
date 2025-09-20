@@ -57,6 +57,8 @@ def create_app():
                 "cors_origins": Config.CORS_ORIGINS,
                 "python_version": sys.version,
                 "current_dir": os.getcwd(),
+                "python_path": sys.path,
+                "registered_routes": [r.rule for r in app.url_map.iter_rules()],
             }
         )
 
