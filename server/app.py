@@ -8,46 +8,7 @@ import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 
-# Initialize with basic config first
-class BasicConfig:
-    ENV = os.getenv("FLASK_ENV", "production")
-    DEBUG = ENV == "development"
-    IS_VERCEL = os.getenv("VERCEL") == "1"
-    
-    # Basic CORS configuration
-    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://chess-com-bay.vercel.app")
-    CORS_ORIGINS = [
-        FRONTEND_URL,
-        "https://chess-com-bay.vercel.app",
-        "https://chess-1uq742bpv-suraj-patels-projects-a4792e8b.vercel.app",
-        "https://chessserver.vercel.app", 
-        "http://localhost:5173",
-        "http://localhost:5000",
-        "http://localhost:3000",
-        "*"  # Allow all for now to fix CORS
-    ]
-    
-    PORT = int(os.getenv("PORT", 5000))
-    HOST = "0.0.0.0"
-    LOG_LEVEL = "INFO"
-
-try:
-    from config.config import Config
-except ImportError as e:
-    print(f"Config import error, using basic config: {e}")
-    Config = BasicConfig
-
-try:
-    from routes.stockfish_routes import stockfish_routes
-    from routes.game_routes import game_routes
-    from routes.groq_routes import groq_routes
-    routes_imported = True
-except ImportError as e:
-    print(f"Routes import error: {e}")
-    print(f"Current directory: {current_dir}")
-    print(f"Python path: {sys.path}")
-    routes_imported = False
-
+from config.config import Config
 
 def create_app():
     app = Flask(__name__)
@@ -65,47 +26,17 @@ def create_app():
         logging.debug("URL: %s", request.url)
         logging.debug("Method: %s", request.method)
 
-    # Configure CORS with simple, permissive settings
-    CORS(
-        app,
-        origins="*",  # Allow all origins for now
-        supports_credentials=True,
-        methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "Origin", "Accept", "X-Requested-With"]
-    )
+    # Configure CORS
+    CORS(app, origins=Config.CORS_ORIGINS, supports_credentials=True)
 
-    # Simple CORS headers for all responses
-    @app.after_request
-    def after_request(response):
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Origin, Accept, X-Requested-With"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        return response
+    # Register blueprints
+    from routes.stockfish_routes import stockfish_routes
+    from routes.game_routes import game_routes
+    from routes.groq_routes import groq_routes
 
-    # Handle OPTIONS requests explicitly
-    @app.before_request
-    def handle_preflight():
-        if request.method == "OPTIONS":
-            response = jsonify({"status": "ok"})
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Origin, Accept, X-Requested-With"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            return response
-
-    # Register blueprints if they were imported successfully
-    if routes_imported:
-        print("Registering blueprints...")
-        try:
-            app.register_blueprint(stockfish_routes, url_prefix="/api/stockfish")
-            app.register_blueprint(game_routes, url_prefix="/api/game")
-            app.register_blueprint(groq_routes, url_prefix="/api/groq")
-            print("Blueprints registered successfully")
-        except Exception as e:
-            print(f"Error registering blueprints: {e}")
-    else:
-        print("Routes not imported, creating basic endpoints")
+    app.register_blueprint(stockfish_routes, url_prefix="/api/stockfish")
+    app.register_blueprint(game_routes, url_prefix="/api/game")
+    app.register_blueprint(groq_routes, url_prefix="/api/groq")
 
     # Basic health check routes
     @app.route("/")
@@ -116,27 +47,15 @@ def create_app():
     def health():
         return jsonify({"status": "ok", "message": "Server is healthy"})
 
-    # Create basic groq health endpoint if routes not imported
-    if not routes_imported:
-        @app.route("/api/groq/health")
-        def groq_health():
-            return jsonify({
-                "status": "ok", 
-                "message": "Basic Groq endpoint",
-                "mode": "fallback"
-            })
-
     @app.route("/debug-info")
     def debug_info():
         return jsonify(
             {
                 "env": Config.ENV,
                 "debug": Config.DEBUG,
-                "cors_origins": getattr(Config, 'CORS_ORIGINS', ['*']),
-                "routes_imported": routes_imported,
-                "is_vercel": getattr(Config, 'IS_VERCEL', False),
+                "cors_origins": Config.CORS_ORIGINS,
                 "python_version": sys.version,
-                "current_dir": os.getcwd()
+                "current_dir": os.getcwd(),
             }
         )
 
@@ -154,38 +73,32 @@ def create_app():
             )
         return jsonify({"routes": routes})
 
-    # Error handlers with CORS
+    # Error handlers
     @app.errorhandler(404)
     def not_found(error):
-        response = jsonify({"error": "Not found"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        return response, 404
+        return jsonify({"error": "Not found"}), 404
 
     @app.errorhandler(500)
     def internal_error(error):
-        response = jsonify({"error": "Internal server error"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        return response, 500
+        return jsonify({"error": "Internal server error"}), 500
 
     @app.errorhandler(Exception)
     def handle_exception(e):
         logging.error(f"Unhandled exception: {str(e)}")
-        response = jsonify({
-            "status": "error",
-            "message": "Internal server error",
-            "details": str(e),
-        })
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        return response, 500
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Internal server error",
+                "details": str(e),
+            }
+        ), 500
 
     return app
 
 
 app = create_app()
 
-# WSGI handler for Vercel
-def handler(request, context):
-    return app
+
 
 # For local development
 if __name__ == "__main__":

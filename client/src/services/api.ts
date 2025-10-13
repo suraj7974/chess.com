@@ -1,8 +1,7 @@
 import axios from "axios";
 import { GameModeType } from "../types";
 
-const isDevelopment = import.meta.env.MODE === "development";
-const API_URL = isDevelopment ? "http://localhost:5000" : "https://chessserver.vercel.app"; // Fixed URL
+const API_URL = "https://chess-com-bay.vercel.app"; // Fixed URL
 
 const API = axios.create({
   baseURL: API_URL,
@@ -22,9 +21,11 @@ interface MoveResponse {
   move?: string;
 }
 
-export const startGame = (playerType: GameModeType) => API.post<GameResponse>("/api/game/start-game", { playerType }); // Add /api prefix
+export const startGame = (playerType: GameModeType) =>
+  API.post<GameResponse>("/api/game/start-game", { playerType }); // Add /api prefix
 
-export const getMove = (gameId: string, move: string) => API.post<MoveResponse>("/api/game/make-move", { gameId, move }); // Add /api prefix
+export const getMove = (gameId: string, move: string) =>
+  API.post<MoveResponse>("/api/game/make-move", { gameId, move }); // Add /api prefix
 
 // Add error interceptor
 API.interceptors.response.use(
@@ -32,5 +33,5 @@ API.interceptors.response.use(
   (error) => {
     console.error("API Error:", error);
     return Promise.reject(error);
-  }
+  },
 );
