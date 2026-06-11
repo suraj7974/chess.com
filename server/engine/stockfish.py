@@ -46,8 +46,7 @@ class StockfishEngine:
             self._setup_engine()
         except Exception as e:
             logging.error(f"Failed to initialize engine: {str(e)}")
-            self.is_serverless = True  # Fall back to serverless mode
-            raise
+            self.is_serverless = True  # Fall back to heuristic moves
 
     def _setup_engine(self):
         self.send_command("uci")

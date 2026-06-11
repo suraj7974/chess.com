@@ -1,187 +1,141 @@
-// TypeScript interfaces for chess.js
-interface ChessMove {
-  color: string;
-  from: string;
-  to: string;
-  flags: string;
-  piece: string;
-  san: string;
-  captured?: string;
-  promotion?: string;
-}
-
-// Import Chess.js properly
 import { Chess } from "chess.js";
 
-const isDevelopment = import.meta.env.MODE === "development";
+// Stockfish 18 (lite, single-threaded WASM) running fully in the browser via a
+// Web Worker. The engine files are copied to /engine/ at build time (see
+// vite.config.ts), so this works on any static host — no backend needed.
 
-const BASE_URL = isDevelopment ? "http://localhost:5000" : "https://chessserver.vercel.app";
+const ENGINE_URL = "/engine/stockfish-18-lite-single.js";
+const ENGINE_INIT_TIMEOUT = 15000;
+const MOVE_TIMEOUT = 20000;
 
-const API_URL = `${BASE_URL}/api/stockfish`;
-
-interface StockfishResponse {
-  status?: string;
-  move?: string;
-  error?: string;
+export interface DifficultyPreset {
+  key: string;
+  label: string;
+  description: string;
+  skillLevel: number; // 0-20
+  moveTimeMs: number;
 }
 
-// Local fallback function to provide moves when the server is unavailable
-const getLocalFallbackMove = (fen: string): string => {
-  try {
-    // Use the properly imported Chess class
-    const chess = new Chess(fen);
-    const moves = chess.moves({ verbose: true }) as ChessMove[];
+export const DIFFICULTY_PRESETS: DifficultyPreset[] = [
+  { key: "easy", label: "Easy", description: "Casual play, makes mistakes", skillLevel: 2, moveTimeMs: 300 },
+  { key: "medium", label: "Medium", description: "Club player strength", skillLevel: 8, moveTimeMs: 600 },
+  { key: "hard", label: "Hard", description: "Strong tournament play", skillLevel: 15, moveTimeMs: 1000 },
+  { key: "max", label: "Maximum", description: "Full engine strength", skillLevel: 20, moveTimeMs: 1500 },
+];
 
-    if (moves.length === 0) {
-      return ""; // No moves available
-    }
+let worker: Worker | null = null;
+let initPromise: Promise<Worker> | null = null;
+// Serialize requests — the engine handles one search at a time
+let queue: Promise<unknown> = Promise.resolve();
 
-    // Use a basic strategy - prioritize captures and checks
-    const captures = moves.filter((move: ChessMove) => move.flags.includes("c"));
-    const checks = moves.filter((move: ChessMove) => move.san.includes("+"));
+const initEngine = (): Promise<Worker> => {
+  if (initPromise) return initPromise;
 
-    let selectedMove: ChessMove;
-    if (captures.length > 0) {
-      // Prioritize capturing high-value pieces
-      captures.sort((a: ChessMove, b: ChessMove) => {
-        const pieceValues: { [key: string]: number } = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-        // Safe property access with type assertion and fallback to 0
-        const valueA = a.captured ? pieceValues[a.captured as string] || 0 : 0;
-        const valueB = b.captured ? pieceValues[b.captured as string] || 0 : 0;
-        return valueB - valueA;
-      });
-      selectedMove = captures[0];
-    } else if (checks.length > 0) {
-      // Choose a random check
-      selectedMove = checks[Math.floor(Math.random() * checks.length)];
-    } else {
-      // Choose a random move
-      selectedMove = moves[Math.floor(Math.random() * moves.length)];
-    }
-
-    // Ensure we're returning a valid move
-    if (selectedMove && selectedMove.from && selectedMove.to) {
-      console.log("Generated valid fallback move:", selectedMove.from + selectedMove.to);
-      return selectedMove.from + selectedMove.to;
-    } else {
-      // Fallback to the first move
-      const firstMove = moves[0];
-      return firstMove.from + firstMove.to;
-    }
-  } catch (error) {
-    console.error("Error generating fallback move:", error);
-
-    // If all else fails, try a simpler approach
+  initPromise = new Promise<Worker>((resolve, reject) => {
+    let w: Worker;
     try {
-      const chess = new Chess(fen);
-      const simpleMoves = chess.moves();
-      if (simpleMoves.length > 0) {
-        // Get a simple move and convert it
-        const move = chess.move(simpleMoves[0]);
-        if (move && move.from && move.to) {
-          return move.from + move.to;
+      w = new Worker(ENGINE_URL);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      w.terminate();
+      reject(new Error("Stockfish engine failed to initialize in time"));
+    }, ENGINE_INIT_TIMEOUT);
+
+    const onMessage = (e: MessageEvent) => {
+      const line = typeof e.data === "string" ? e.data : "";
+      if (line === "uciok") {
+        clearTimeout(timeout);
+        w.removeEventListener("message", onMessage);
+        worker = w;
+        resolve(w);
+      }
+    };
+
+    w.addEventListener("message", onMessage);
+    w.addEventListener("error", (e) => {
+      clearTimeout(timeout);
+      reject(new Error(`Stockfish worker error: ${e.message}`));
+    });
+
+    w.postMessage("uci");
+  });
+
+  initPromise.catch(() => {
+    initPromise = null;
+    worker = null;
+  });
+
+  return initPromise;
+};
+
+const searchBestMove = (w: Worker, fen: string, skillLevel: number, moveTimeMs: number): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      w.removeEventListener("message", onMessage);
+      reject(new Error("Stockfish search timed out"));
+    }, MOVE_TIMEOUT);
+
+    const onMessage = (e: MessageEvent) => {
+      const line = typeof e.data === "string" ? e.data : "";
+      if (line.startsWith("bestmove")) {
+        clearTimeout(timeout);
+        w.removeEventListener("message", onMessage);
+        const move = line.split(" ")[1];
+        if (move && move !== "(none)") {
+          resolve(move);
+        } else {
+          reject(new Error("No move available"));
         }
       }
-    } catch (e) {
-      console.error("Even simple fallback failed:", e);
-    }
+    };
 
-    // Default emergency move for white
-    return "e2e4";
-  }
+    w.addEventListener("message", onMessage);
+    w.postMessage(`setoption name Skill Level value ${skillLevel}`);
+    w.postMessage(`position fen ${fen}`);
+    w.postMessage(`go movetime ${moveTimeMs}`);
+  });
+
+// Heuristic fallback if the WASM engine can't run (very old browsers)
+const getLocalFallbackMove = (fen: string): string => {
+  const chess = new Chess(fen);
+  const moves = chess.moves({ verbose: true });
+  if (moves.length === 0) return "";
+
+  const captures = moves.filter((m) => m.flags.includes("c"));
+  const checks = moves.filter((m) => m.san.includes("+"));
+  const pool = captures.length > 0 ? captures : checks.length > 0 ? checks : moves;
+  const move = pool[Math.floor(Math.random() * pool.length)];
+  return move.from + move.to + (move.promotion ?? "");
 };
 
 export const checkStockfishHealth = async (): Promise<boolean> => {
   try {
-    console.log("Checking Stockfish health...");
-    const url = `${API_URL}/health`;
-    console.log("API URL:", url);
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      mode: "cors", // Explicitly set CORS mode
-      credentials: "omit", // Don't send credentials to work with CORS *
-    });
-
-    if (!response.ok) {
-      console.error("Response status:", response.status);
-      console.error("Response headers:", [...response.headers.entries()]);
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log("Health check response:", data);
-    return data.status === "ok";
+    await initEngine();
+    return true;
   } catch (error) {
-    console.error("Health check failed:", error);
-
-    // Return true for CORS or network errors to use local fallback
-    if (error instanceof TypeError || String(error).includes("CORS") || String(error).includes("network")) {
-      console.warn("Health check failed with possible CORS or network issue. Using local fallback.");
-      return true;
-    }
-
+    console.error("Stockfish WASM unavailable:", error);
     return false;
   }
 };
 
-export const getStockfishMove = async (fen: string, skillLevel: number = 20): Promise<string> => {
-  try {
-    // First check if engine is healthy
-    const isHealthy = await checkStockfishHealth();
-    if (!isHealthy) {
-      throw new Error("Stockfish engine is not available");
-    }
-
+export const getStockfishMove = async (fen: string, skillLevel = 20, moveTimeMs = 1000): Promise<string> => {
+  const run = queue.then(async () => {
     try {
-      // Attempt to get move from server
-      const response = await fetch(`${API_URL}/move`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        mode: "cors",
-        credentials: "omit", // Don't send credentials to work with CORS *
-        body: JSON.stringify({ fen, skillLevel }),
-      });
-
-      if (!response.ok) {
-        // If server request fails, use local fallback
-        console.warn(`Server returned ${response.status} - using local fallback`);
-        const fallbackMove = getLocalFallbackMove(fen);
-        console.log("Using local fallback move:", fallbackMove);
-        return fallbackMove;
-      }
-
-      const data = await response.json();
-      console.log("Server response:", data);
-
-      if (!data.move) {
-        throw new Error("No move returned from server");
-      }
-
-      return data.move;
+      const w = await initEngine();
+      return await searchBestMove(w, fen, skillLevel, moveTimeMs);
     } catch (error) {
-      console.error("Error communicating with server:", error);
-
-      // Use local fallback for any network errors
-      const fallbackMove = getLocalFallbackMove(fen);
-      console.log("Using local fallback move due to error:", fallbackMove);
-      return fallbackMove;
-    }
-  } catch (error) {
-    console.error("Error getting Stockfish move:", error);
-    // Final fallback - this ensures the game continues even with errors
-    try {
+      console.error("Stockfish WASM failed, using heuristic fallback:", error);
+      // Reset so the next call retries a fresh worker
+      worker?.terminate();
+      worker = null;
+      initPromise = null;
       return getLocalFallbackMove(fen);
-    } catch (e) {
-      console.error("Even fallback generation failed:", e);
-      throw error; // Only throw if absolutely everything fails
     }
-  }
+  });
+  queue = run.catch(() => undefined);
+  return run;
 };

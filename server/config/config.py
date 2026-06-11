@@ -27,7 +27,7 @@ class Config:
 
     # LLM API settings
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-    GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3")
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "llama70b")
 
     # Server configuration
     PORT = int(os.getenv("PORT", 5000))

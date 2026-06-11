@@ -1,9 +1,28 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Chess, Square } from "chess.js";
-import { Button, VStack, Text, useToast } from "@chakra-ui/react";
+import {
+  Badge,
+  Box,
+  Button,
+  Flex,
+  Grid,
+  HStack,
+  Heading,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  Spinner,
+  Text,
+  VStack,
+  useDisclosure,
+  useToast,
+} from "@chakra-ui/react";
 import ChessBoard from "./ChessBoard";
-import { getStockfishMove } from "../services/stockfish.service";
-import { getGroqMove, getGroqModels, uciToSquares } from "../services/groq.service";
+import { getStockfishMove, DIFFICULTY_PRESETS, DifficultyPreset } from "../services/stockfish.service";
+import { getGroqMove, getGroqModels, uciToSquares, GroqMoveResult } from "../services/groq.service";
 import { GameModeType, CustomSquareStyles, GroqModel } from "../types";
 import ModelSelector from "./ModelSelector";
 
@@ -12,303 +31,354 @@ interface ChessGameProps {
   onRestartGame: () => void;
 }
 
+const SELECTED_STYLE = { backgroundColor: "rgba(255, 213, 79, 0.55)" };
+const TARGET_STYLE = {
+  background: "radial-gradient(circle, rgba(0,0,0,0.25) 22%, transparent 24%)",
+};
+const CAPTURE_TARGET_STYLE = {
+  background: "radial-gradient(circle, transparent 56%, rgba(0,0,0,0.25) 58%)",
+};
+const LAST_MOVE_STYLE = { backgroundColor: "rgba(155, 199, 0, 0.45)" };
+
 const ChessGame = ({ gameMode, onRestartGame }: ChessGameProps) => {
-  const [game, setGame] = useState(new Chess());
-  const [position, setPosition] = useState(game.fen());
+  const [game, setGame] = useState(() => new Chess());
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [selectedPiece, setSelectedPiece] = useState<Square | null>(null);
-  const [customSquareStyles, setCustomSquareStyles] = useState<CustomSquareStyles>({});
+  const [moveStyles, setMoveStyles] = useState<CustomSquareStyles>({});
+  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [groqModels, setGroqModels] = useState<GroqModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>("llama3");
+  const [selectedModel, setSelectedModel] = useState<string>("llama70b");
+  const [difficulty, setDifficulty] = useState<DifficultyPreset>(DIFFICULTY_PRESETS[2]);
+  const [lastAiInfo, setLastAiInfo] = useState<GroqMoveResult | null>(null);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
-  // Update the chessboard position when the game changes
-  useEffect(() => {
-    setPosition(game.fen());
-  }, [game]);
+  const position = game.fen();
+  const isThinking = !isPlayerTurn && gameMode !== "human" && !game.isGameOver();
 
-  // Fetch available Groq models on component mount
+  // Fetch available Groq models when playing against an LLM
   useEffect(() => {
-    if (gameMode === "groq") {
-      const fetchModels = async () => {
-        try {
-          console.log("Requesting Groq models...");
-          const result = await getGroqModels();
-          console.log("Received models:", result);
+    if (gameMode !== "groq") return;
+    getGroqModels()
+      .then((result) => {
+        setGroqModels(result.models);
+        setSelectedModel(result.default);
+      })
+      .catch(() => {
+        toast({
+          title: "Failed to load AI models",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      });
+  }, [gameMode, toast]);
 
-          if (result.models && result.models.length > 0) {
-            console.log("Setting models:", result.models.map((m) => m.name).join(", "));
-            setGroqModels(result.models);
-            setSelectedModel(result.default);
-          } else {
-            console.warn("No models returned");
-          }
-        } catch (error) {
-          console.error("Failed to fetch models:", error);
+  const customSquareStyles = useMemo<CustomSquareStyles>(() => {
+    const styles: CustomSquareStyles = {};
+    if (lastMove) {
+      styles[lastMove.from] = LAST_MOVE_STYLE;
+      styles[lastMove.to] = LAST_MOVE_STYLE;
+    }
+    return { ...styles, ...moveStyles };
+  }, [lastMove, moveStyles]);
+
+  const resetSelection = () => {
+    setMoveStyles({});
+    setSelectedPiece(null);
+  };
+
+  const makeMove = useCallback(
+    (from: Square, to: Square, promotion = "q") => {
+      try {
+        const gameCopy = new Chess(game.fen());
+        const moveResult = gameCopy.move({ from, to, promotion });
+        if (!moveResult) return false;
+
+        setGame(gameCopy);
+        setLastMove({ from, to });
+        setMoveHistory((prev) => [...prev, moveResult.san]);
+        resetSelection();
+
+        if (gameCopy.isGameOver()) {
+          setIsPlayerTurn(true);
+          onOpen();
+        } else {
+          setIsPlayerTurn(gameMode === "human" ? true : gameCopy.turn() === "w");
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [game, gameMode, onOpen],
+  );
+
+  // Ask the engine / model for a move when it's the computer's turn
+  useEffect(() => {
+    if (isPlayerTurn || gameMode === "human" || game.isGameOver()) return;
+
+    let cancelled = false;
+    const fen = game.fen();
+
+    const fetchMove = async () => {
+      try {
+        let uci: string;
+        if (gameMode === "stockfish") {
+          uci = await getStockfishMove(fen, difficulty.skillLevel, difficulty.moveTimeMs);
+        } else {
+          const result = await getGroqMove(fen, moveHistory, selectedModel);
+          if (cancelled) return;
+          setLastAiInfo(result);
+          uci = result.move;
+        }
+        if (cancelled || !uci) return;
+
+        const { from, to, promotion } = uciToSquares(uci);
+        // Short pause so the reply doesn't feel instant
+        setTimeout(() => {
+          if (!cancelled) makeMove(from, to, promotion ?? "q");
+        }, 250);
+      } catch (error) {
+        console.error(`${gameMode} move error:`, error);
+        if (!cancelled) {
           toast({
-            title: "Error",
-            description: "Failed to load AI models",
+            title: `Failed to get ${gameMode === "stockfish" ? "Stockfish" : "AI"} move`,
             status: "error",
             duration: 3000,
             isClosable: true,
           });
+          setIsPlayerTurn(true);
         }
-      };
+      }
+    };
 
-      fetchModels();
-    }
-  }, [gameMode, toast]);
+    fetchMove();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlayerTurn, game]);
 
-  // Reset styles when starting a new move
-  const resetStyles = () => {
-    setCustomSquareStyles({});
-    setSelectedPiece(null);
+  const showMovesFor = (square: Square) => {
+    const piece = game.get(square);
+    if (!piece || piece.color !== game.turn()) return false;
+
+    const styles: CustomSquareStyles = { [square]: SELECTED_STYLE };
+    game.moves({ square, verbose: true }).forEach((move) => {
+      styles[move.to] = game.get(move.to as Square) ? CAPTURE_TARGET_STYLE : TARGET_STYLE;
+    });
+    setMoveStyles(styles);
+    setSelectedPiece(square);
+    return true;
   };
 
-  // Make a move
-  const makeMove = useCallback(
-    (from: Square, to: Square) => {
-      try {
-        const gameCopy = new Chess(game.fen());
-        const moveResult = gameCopy.move({ from, to, promotion: "q" });
-
-        if (moveResult) {
-          // Update game state
-          setGame(gameCopy);
-          setPosition(gameCopy.fen());
-          setIsPlayerTurn(false);
-
-          // Update move history
-          const newMove = `${moveResult.san}`;
-          setMoveHistory((prev) => [...prev, newMove]);
-          resetStyles();
-          return true;
-        }
-        return false;
-      } catch (error) {
-        console.error("Move error:", error);
-        return false;
-      }
-    },
-    [game]
-  );
-
-  // Handle computer move based on game mode
-  const handleComputerMove = useCallback(async () => {
-    try {
-      let move: string;
-
-      if (gameMode === "stockfish") {
-        move = await getStockfishMove(game.fen());
-      } else if (gameMode === "groq") {
-        // Pass the move history and selected model for context
-        move = await getGroqMove(game.fen(), moveHistory, selectedModel);
-      } else {
-        // This is for human vs human mode
-        setIsPlayerTurn(true);
-        return;
-      }
-
-      const { from, to } = uciToSquares(move);
-
-      // Highlight the computer's move
-      setCustomSquareStyles({
-        [from]: { backgroundColor: "rgba(255, 255, 0, 0.4)" },
-        [to]: { backgroundColor: "rgba(255, 255, 0, 0.4)" },
-      });
-
-      // Make the move after a small delay to show the highlights
-      setTimeout(() => {
-        makeMove(from, to);
-        setIsPlayerTurn(true);
-        resetStyles();
-      }, 500);
-    } catch (error) {
-      console.error(`${gameMode} move error:`, error);
-      toast({
-        title: "Error",
-        description: `Failed to get ${gameMode} move. Please try again.`,
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
-      setIsPlayerTurn(true);
-    }
-  }, [game, gameMode, makeMove, moveHistory, selectedModel, toast]);
-
-  // Get computer move when it's their turn
-  useEffect(() => {
-    if (!isPlayerTurn && !game.isGameOver()) {
-      handleComputerMove();
-    }
-  }, [isPlayerTurn, game, handleComputerMove]);
-
-  // Handle piece drop (for drag and drop)
   const onPieceDrop = (sourceSquare: Square, targetSquare: Square) => {
     if (!isPlayerTurn || game.isGameOver()) return false;
     return makeMove(sourceSquare, targetSquare);
   };
 
-  // Handle piece click (for click-to-move)
   const onPieceClick = (square: Square) => {
     if (!isPlayerTurn || game.isGameOver()) return;
 
-    // If a piece is already selected
     if (selectedPiece) {
-      // If the same square is clicked again, deselect it
       if (selectedPiece === square) {
-        setSelectedPiece(null);
-        setCustomSquareStyles({});
-      } else {
-        // Try to make a move
-        const moveSuccess = makeMove(selectedPiece, square);
-
-        if (!moveSuccess) {
-          // If the move failed, select the new square if it has a piece
-          const piece = game.get(square);
-          if (piece && piece.color === (game.turn() === "w" ? "w" : "b")) {
-            setSelectedPiece(square);
-
-            // Highlight the selected square and valid moves
-            const newStyles: CustomSquareStyles = {
-              [square]: { backgroundColor: "rgba(255, 0, 0, 0.4)" },
-            };
-
-            // Highlight valid move targets
-            game.moves({ square, verbose: true }).forEach((move) => {
-              newStyles[move.to] = { backgroundColor: "rgba(0, 255, 0, 0.4)" };
-            });
-
-            setCustomSquareStyles(newStyles);
-          } else {
-            resetStyles();
-          }
-        }
+        resetSelection();
+        return;
       }
-    } else {
-      // No piece selected yet
-      const piece = game.get(square);
-
-      // Only select piece of current player's color
-      if (piece && piece.color === (game.turn() === "w" ? "w" : "b")) {
-        setSelectedPiece(square);
-
-        // Highlight the selected square and valid moves
-        const newStyles: CustomSquareStyles = {
-          [square]: { backgroundColor: "rgba(255, 0, 0, 0.4)" },
-        };
-
-        // Highlight valid move targets
-        game.moves({ square, verbose: true }).forEach((move) => {
-          newStyles[move.to] = { backgroundColor: "rgba(0, 255, 0, 0.4)" };
-        });
-
-        setCustomSquareStyles(newStyles);
-      }
+      if (makeMove(selectedPiece, square)) return;
     }
+    if (!showMovesFor(square)) resetSelection();
   };
 
-  // Handle piece drag begin
-  const onPieceDragBegin = (piece: any, sourceSquare: Square) => {
+  const onPieceDragBegin = (_piece: unknown, sourceSquare: Square) => {
     if (!isPlayerTurn || game.isGameOver()) return;
-
-    // Highlight valid move targets
-    const newStyles: CustomSquareStyles = {};
-    game.moves({ square: sourceSquare, verbose: true }).forEach((move) => {
-      newStyles[move.to] = { backgroundColor: "rgba(0, 255, 0, 0.4)" };
-    });
-
-    setCustomSquareStyles(newStyles);
+    showMovesFor(sourceSquare);
   };
 
-  // Handle piece drag end
-  const onPieceDragEnd = () => {
-    resetStyles();
-  };
-
-  // Reset the game
   const resetGame = () => {
-    const newGame = new Chess();
-    setGame(newGame);
-    setPosition(newGame.fen());
+    setGame(new Chess());
     setIsPlayerTurn(true);
     setMoveHistory([]);
-    resetStyles();
+    setLastMove(null);
+    setLastAiInfo(null);
+    resetSelection();
+    onClose();
   };
 
-  // Get game status text
-  const getGameStatus = () => {
-    if (game.isCheckmate()) return "Checkmate!";
-    if (game.isDraw()) return "Draw!";
-    if (game.isStalemate()) return "Stalemate!";
-    if (game.isCheck()) return "Check!";
+  const opponentName =
+    gameMode === "stockfish"
+      ? `Stockfish · ${difficulty.label}`
+      : gameMode === "groq"
+        ? groqModels.find((m) => m.key === selectedModel)?.name ?? "AI Model"
+        : "Pass & Play";
 
-    if (isPlayerTurn) {
-      return "Your turn";
-    } else {
-      return gameMode === "stockfish" ? "Stockfish is thinking..." : "AI is thinking...";
+  const statusText = () => {
+    if (game.isCheckmate()) return `Checkmate — ${game.turn() === "w" ? "Black" : "White"} wins`;
+    if (game.isStalemate()) return "Draw by stalemate";
+    if (game.isDraw()) return "Draw";
+    if (isThinking) return gameMode === "stockfish" ? "Stockfish is thinking…" : "Model is thinking…";
+    const turn = game.turn() === "w" ? "White" : "Black";
+    return `${game.isCheck() ? "Check — " : ""}${gameMode === "human" ? `${turn} to move` : "Your turn"}`;
+  };
+
+  const movePairs = useMemo(() => {
+    const pairs: { n: number; white: string; black?: string }[] = [];
+    for (let i = 0; i < moveHistory.length; i += 2) {
+      pairs.push({ n: i / 2 + 1, white: moveHistory[i], black: moveHistory[i + 1] });
     }
+    return pairs;
+  }, [moveHistory]);
+
+  // Keep the latest move visible in the bottom strip without moving the page
+  const movesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    movesRef.current?.scrollTo({ left: movesRef.current.scrollWidth, behavior: "smooth" });
+  }, [moveHistory]);
+
+  const aiSourceBadge = () => {
+    if (gameMode !== "groq" || !lastAiInfo) return null;
+    if (lastAiInfo.source === "groq") {
+      return <Badge colorScheme="purple">{lastAiInfo.modelName ?? "LLM"}</Badge>;
+    }
+    return (
+      <Badge colorScheme="orange" title="The model/server was unavailable, a basic heuristic move was played">
+        fallback move
+      </Badge>
+    );
   };
 
-  // Get opposing player name
-  const getOpponentName = () => {
-    if (gameMode === "stockfish") return "Stockfish";
-    if (gameMode === "groq") return "Mistral AI";
-    return "Human";
-  };
-
-  // Handle model change
-  const handleModelChange = (modelKey: string) => {
-    console.log(`Changing model to: ${modelKey}`);
-    setSelectedModel(modelKey);
-
-    // Find the selected model details
-    const selectedModelData = groqModels.find((m) => m.key === modelKey);
-    console.log("Selected model details:", selectedModelData);
-
-    toast({
-      title: "Model Changed",
-      description: `Now playing against ${selectedModelData?.name || modelKey}`,
-      status: "info",
-      duration: 2000,
-      isClosable: true,
-    });
-  };
+  const panelProps = {
+    bg: "surface.800",
+    border: "1px solid",
+    borderColor: "surface.700",
+    borderRadius: "xl",
+    p: 4,
+  } as const;
 
   return (
-    <div className="chess-container">
-      <Text fontSize="2xl" mb={2}>
-        Chess Game vs {getOpponentName()}
-      </Text>
+    <Flex direction="column" w="full" h={{ xl: "calc(100vh - 130px)" }} gap={4}>
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent bg="surface.800" color="gray.100">
+          <ModalHeader>Game over</ModalHeader>
+          <ModalBody fontSize="lg">{statusText()}</ModalBody>
+          <ModalFooter gap={3}>
+            <Button colorScheme="green" onClick={resetGame}>
+              Play again
+            </Button>
+            <Button variant="ghost" onClick={onClose}>
+              Review board
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
-      {gameMode === "groq" && groqModels.length > 0 && <ModelSelector models={groqModels} selectedModel={selectedModel} onModelChange={handleModelChange} />}
+      {/* Board stays centered; panels live in the corners on large screens so
+          nothing around the board ever changes its position */}
+      <Flex flex="1" position="relative" direction="column" align="center" justify="center" gap={4}>
+        <Box {...panelProps} position={{ base: "static", xl: "absolute" }} top={0} left={0} w={{ base: "min(92vw, 600px)", xl: "270px" }}>
+          <Text fontSize="xs" textTransform="uppercase" letterSpacing="wide" color="gray.500">
+            Playing against
+          </Text>
+          <Heading size="sm" color="gray.50" mt={1} mb={3}>
+            {opponentName}
+          </Heading>
+          <HStack spacing={3} bg="surface.700" borderRadius="lg" px={3} py={2}>
+            {isThinking && <Spinner size="sm" color="accent.300" />}
+            <Text fontWeight="600" fontSize="sm">
+              {statusText()}
+            </Text>
+            {aiSourceBadge()}
+          </HStack>
+        </Box>
 
-      <div className="chessboard-wrapper">
         <ChessBoard
           position={position}
           onPieceDrop={onPieceDrop}
           onPieceClick={onPieceClick}
           customSquareStyles={customSquareStyles}
           onPieceDragBegin={onPieceDragBegin}
-          onPieceDragEnd={onPieceDragEnd}
+          onPieceDragEnd={resetSelection}
         />
-      </div>
 
-      <VStack spacing={3} className="controls">
-        <Text fontSize="xl" fontWeight="bold">
-          {getGameStatus()}
+        {(gameMode === "groq" || gameMode === "stockfish") && (
+          <Box {...panelProps} position={{ base: "static", xl: "absolute" }} top={0} right={0} w={{ base: "min(92vw, 600px)", xl: "270px" }}>
+            {gameMode === "groq" && groqModels.length > 0 && (
+              <ModelSelector models={groqModels} selectedModel={selectedModel} onModelChange={setSelectedModel} />
+            )}
+            {gameMode === "stockfish" && (
+              <VStack align="stretch" spacing={2}>
+                <Text fontSize="xs" textTransform="uppercase" letterSpacing="wide" color="gray.500">
+                  Difficulty
+                </Text>
+                <Grid templateColumns="repeat(2, 1fr)" gap={2}>
+                  {DIFFICULTY_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.key}
+                      size="sm"
+                      variant={difficulty.key === preset.key ? "solid" : "outline"}
+                      colorScheme={difficulty.key === preset.key ? "green" : "gray"}
+                      onClick={() => setDifficulty(preset)}
+                      title={preset.description}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </Grid>
+              </VStack>
+            )}
+          </Box>
+        )}
+
+        <VStack
+          {...panelProps}
+          position={{ base: "static", xl: "absolute" }}
+          bottom={0}
+          right={0}
+          w={{ base: "min(92vw, 600px)", xl: "270px" }}
+          align="stretch"
+          spacing={2}
+        >
+          <Button colorScheme="green" size="sm" onClick={resetGame}>
+            New game
+          </Button>
+          <Button variant="outline" colorScheme="gray" size="sm" onClick={onRestartGame}>
+            Change opponent
+          </Button>
+        </VStack>
+      </Flex>
+
+      {/* Fixed-height move strip — the page never grows or scrolls as moves
+          are added; the strip scrolls horizontally instead */}
+      <Flex h="56px" flexShrink={0} align="center" gap={4} px={4} w={{ base: "min(92vw, 600px)", xl: "full" }} mx="auto" {...panelProps} py={0}>
+        <Text fontSize="xs" textTransform="uppercase" letterSpacing="wide" color="gray.500" flexShrink={0}>
+          Moves
         </Text>
-
-        <Button colorScheme="blue" onClick={resetGame} width="full" maxW="200px">
-          New Game
-        </Button>
-
-        <Button colorScheme="gray" onClick={onRestartGame} width="full" maxW="200px">
-          Change Opponent
-        </Button>
-      </VStack>
-    </div>
+        <Box ref={movesRef} flex="1" overflowX="auto" whiteSpace="nowrap" fontFamily="mono" fontSize="sm" py={2}>
+          {movePairs.length === 0 ? (
+            <Text as="span" color="gray.600">
+              No moves yet
+            </Text>
+          ) : (
+            movePairs.map((pair) => (
+              <Text as="span" key={pair.n} mr={4}>
+                <Text as="span" color="gray.600">
+                  {pair.n}.
+                </Text>{" "}
+                <Text as="span" color="gray.200">
+                  {pair.white}
+                </Text>{" "}
+                <Text as="span" color="gray.400">
+                  {pair.black ?? ""}
+                </Text>
+              </Text>
+            ))
+          )}
+        </Box>
+      </Flex>
+    </Flex>
   );
 };
 

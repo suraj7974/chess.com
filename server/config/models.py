@@ -1,41 +1,39 @@
 """
 Groq model definitions and configuration
+
+Model IDs must exist on GroqCloud — see https://console.groq.com/docs/models.
+`reasoning_effort` is passed to the API when set; valid values differ per
+model family (gpt-oss: low/medium/high, qwen3: none/default).
 """
 
-# Available Groq models
 GROQ_MODELS = {
-    "deepseek": {
-        "id": "deepseek-r1-distill-llama-70b",
-        "name": "Deepseek R1 (70B)",
-        "max_tokens": 4096,
-        "temperature": 0.1,  # Lower temperature for more precise responses
-        "description": "Powerful 70B model with excellent reasoning capabilities",
-    },
-    "mixtral": {
-        "id": "mixtral-8x7b-32768",
-        "name": "Mixtral 8x7B",
-        "max_tokens": 8192,
-        "temperature": 0.2,
-        "description": "Strong mixture-of-experts model with long context",
-    },
-    "llama3": {
+    "llama70b": {
         "id": "llama-3.3-70b-versatile",
-        "name": "LLaMa 3.3 (70B)",
-        "max_tokens": 8192,
+        "name": "LLaMA 3.3 (70B)",
+        "max_tokens": 20,
         "temperature": 0.2,
-        "description": "Latest LLaMa model with versatile capabilities",
+        "description": "Meta's flagship 70B model — strong all-round play",
     },
-    "gemma2": {
-        "id": "gemma2-9b-it",
-        "name": "Gemma 2 (9B)",
-        "max_tokens": 4096,
+    "gpt-oss-20b": {
+        "id": "openai/gpt-oss-20b",
+        "name": "GPT-OSS (20B)",
+        "max_tokens": 2048,
         "temperature": 0.3,
-        "description": "Smaller but efficient instruction-tuned model",
+        "reasoning_effort": "low",
+        "description": "OpenAI's open-weight reasoning model — thinks before moving",
+    },
+    "qwen3-32b": {
+        "id": "qwen/qwen3-32b",
+        "name": "Qwen 3 (32B)",
+        "max_tokens": 64,
+        "temperature": 0.2,
+        "reasoning_effort": "none",
+        "description": "Alibaba's Qwen3 — fast, direct answers",
     },
 }
 
 # Default model to use
-DEFAULT_MODEL = "llama3"
+DEFAULT_MODEL = "llama70b"
 
 
 def get_model_by_key(key):

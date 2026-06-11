@@ -1,37 +1,37 @@
 import React from "react";
-import { Box, FormControl, FormLabel, Select, Tooltip, Text } from "@chakra-ui/react";
+import { Select, Text, VStack } from "@chakra-ui/react";
 import { ModelSelectionProps } from "../types";
 
 const ModelSelector: React.FC<ModelSelectionProps> = ({ models, selectedModel, onModelChange }) => {
-  if (!models || models.length === 0) {
-    return null;
-  }
+  if (!models || models.length === 0) return null;
+
+  const current = models.find((m) => m.key === selectedModel);
 
   return (
-    <Box mb={4} width="100%" maxW="400px">
-      <FormControl>
-        <FormLabel fontWeight="bold">AI Model:</FormLabel>
-        <Select value={selectedModel} onChange={(e) => onModelChange(e.target.value)} variant="filled" size="md">
-          {models.map((model) => (
-            <option key={model.key} value={model.key}>
-              {model.name}
-            </option>
-          ))}
-        </Select>
-      </FormControl>
-
-      {/* Display the description of the selected model */}
-      {models.map(
-        (model) =>
-          model.key === selectedModel && (
-            <Tooltip key={model.key} label={model.description}>
-              <Text fontSize="xs" mt={1} color="gray.500" noOfLines={2}>
-                {model.description}
-              </Text>
-            </Tooltip>
-          )
+    <VStack align="stretch" spacing={2}>
+      <Text fontSize="xs" textTransform="uppercase" letterSpacing="wide" color="gray.500">
+        Model
+      </Text>
+      <Select
+        value={selectedModel}
+        onChange={(e) => onModelChange(e.target.value)}
+        bg="surface.700"
+        borderColor="surface.600"
+        size="md"
+        _hover={{ borderColor: "accent.500" }}
+      >
+        {models.map((model) => (
+          <option key={model.key} value={model.key}>
+            {model.name}
+          </option>
+        ))}
+      </Select>
+      {current && (
+        <Text fontSize="xs" color="gray.500" noOfLines={2}>
+          {current.description}
+        </Text>
       )}
-    </Box>
+    </VStack>
   );
 };
 

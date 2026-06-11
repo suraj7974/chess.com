@@ -1,5 +1,5 @@
 import { Chessboard } from "react-chessboard";
-import { Box, useMediaQuery } from "@chakra-ui/react";
+import { Box } from "@chakra-ui/react";
 import { CustomSquareStyles } from "../types";
 import { Square } from "chess.js";
 import { Piece } from "react-chessboard/dist/chessboard/types";
@@ -14,46 +14,25 @@ interface ChessBoardProps {
 }
 
 function ChessBoard({ onPieceDrop, position, onPieceClick, customSquareStyles, onPieceDragBegin, onPieceDragEnd }: ChessBoardProps) {
-  const [isMobile] = useMediaQuery("(max-width: 480px)");
-  const [isTablet] = useMediaQuery("(max-width: 768px)");
-
-  const boardWidth = isMobile ? window.innerWidth * 0.85 : isTablet ? window.innerWidth * 0.7 : 500;
-
-  const customBoardStyle = {
-    borderRadius: "4px",
-    boxShadow: "0 2px 10px rgba(0, 0, 0, 0.5)",
-    width: "100%",
-    maxWidth: "100%",
-  };
-
-  const customDarkSquareStyle = { backgroundColor: "#5B793D" };
-  const customLightSquareStyle = { backgroundColor: "#eeeeee" };
-
-  const handleSquareClick = (square: Square) => {
-    onPieceClick(square);
-  };
-
-  const handlePieceClick = (piece: any) => {
-    if (piece && piece.square) {
-      onPieceClick(piece.square as Square);
-    }
-  };
-
   return (
-    <Box width="100%" maxWidth={`${boardWidth}px`} mx="auto" className="chessboard-wrapper">
+    <Box
+      w={{ base: "min(92vw, 600px)", xl: "min(700px, calc(100vh - 250px), calc(100vw - 620px))" }}
+      mx="auto"
+      borderRadius="xl"
+      overflow="hidden"
+      boxShadow="0 10px 40px -10px rgba(0, 0, 0, 0.7)"
+    >
       <Chessboard
         position={position}
         onPieceDrop={onPieceDrop}
-        onSquareClick={handleSquareClick}
-        onPieceClick={handlePieceClick}
+        onSquareClick={onPieceClick}
         customSquareStyles={customSquareStyles}
-        boardWidth={boardWidth}
         animationDuration={200}
         areArrowsAllowed={false}
         showBoardNotation={true}
-        customBoardStyle={customBoardStyle}
-        customDarkSquareStyle={customDarkSquareStyle}
-        customLightSquareStyle={customLightSquareStyle}
+        customBoardStyle={{ width: "100%" }}
+        customDarkSquareStyle={{ backgroundColor: "#769656" }}
+        customLightSquareStyle={{ backgroundColor: "#eeeed2" }}
         onPieceDragBegin={onPieceDragBegin}
         onPieceDragEnd={onPieceDragEnd}
       />
