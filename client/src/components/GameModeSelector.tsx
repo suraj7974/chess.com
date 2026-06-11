@@ -16,19 +16,22 @@ const MODES: ModeCard[] = [
   {
     mode: "stockfish",
     title: "Stockfish",
-    description: "The world's strongest chess engine, running right in your browser. Pick a difficulty from casual to brutal.",
+    description:
+      "The world's strongest chess engine, running right in your browser. Pick a difficulty from casual to brutal.",
     accent: "#769656",
   },
   {
     mode: "groq",
     title: "AI Models",
-    description: "Challenge large language models like LLaMA 3.3 and GPT-OSS. Watch how an LLM actually plays chess.",
+    description:
+      "Challenge large language models like LLaMA 3.3 and GPT-OSS. Watch how an LLM actually plays chess (beleave me they don't play good 😂).",
     accent: "#9f7aea",
   },
   {
     mode: "human",
     title: "Pass & Play",
-    description: "Two players, one board. Play a friendly game with someone next to you.",
+    description:
+      "Two players, one board. Play a friendly game with someone next to you.",
     accent: "#4299e1",
   },
 ];
@@ -37,11 +40,16 @@ const GameModeSelector = ({ onSelect }: GameModeSelectorProps) => {
   return (
     <VStack spacing={{ base: 8, md: 12 }} maxW="5xl" w="full">
       <VStack spacing={3} textAlign="center">
-        <Heading size={{ base: "xl", md: "2xl" }} color="gray.50" letterSpacing="tight">
+        <Heading
+          size={{ base: "xl", md: "2xl" }}
+          color="gray.50"
+          letterSpacing="tight"
+        >
           Choose your opponent
         </Heading>
         <Text color="gray.400" fontSize={{ base: "md", md: "lg" }} maxW="lg">
-          Play against the strongest engine ever built, a large language model, or a friend.
+          Play against the strongest engine ever built, a large language model,
+          or a friend.
         </Text>
       </VStack>
 

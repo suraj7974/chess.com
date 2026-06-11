@@ -1,13 +1,12 @@
-import os
 import logging
+import os
 import random
 import re
 import traceback
 
 import chess
-
 from config.config import Config
-from config.models import get_model_by_key, DEFAULT_MODEL
+from config.models import DEFAULT_MODEL, get_model_by_key
 
 # Kept for backwards compatibility with debug endpoints; no longer used to
 # serve gameplay moves (caching by position made every game identical and
@@ -72,7 +71,9 @@ class GroqEngine:
 
             api_key = os.getenv("GROQ_API_KEY") or getattr(Config, "GROQ_API_KEY", None)
             if not api_key:
-                raise ValueError("GROQ_API_KEY not found in environment variables or Config")
+                raise ValueError(
+                    "GROQ_API_KEY not found in environment variables or Config"
+                )
 
             self.model_key = model_key or DEFAULT_MODEL
             self.model_config = get_model_by_key(self.model_key)
@@ -152,7 +153,10 @@ class GroqEngine:
         text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
 
         # Candidate tokens: SAN like e4, Nf3, exd5, O-O, e8=Q+ or UCI like e2e4
-        tokens = re.findall(r"\b(?:O-O-O|O-O|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][a-h][1-8][qrbn]?)\b", text)
+        tokens = re.findall(
+            r"\b(?:O-O-O|O-O|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][a-h][1-8][qrbn]?)\b",
+            text,
+        )
         for token in tokens:
             # Try SAN first
             try:
@@ -190,7 +194,9 @@ class GroqEngine:
                     return {"move": move.uci(), "source": "groq", "raw": raw}
 
                 bad_move = raw[:50]
-                logging.warning(f"Attempt {attempt + 1}: no legal move in reply {raw!r}")
+                logging.warning(
+                    f"Attempt {attempt + 1}: no legal move in reply {raw!r}"
+                )
             except Exception as e:
                 last_error = e
                 logging.error(f"Groq API error on attempt {attempt + 1}: {e}")
